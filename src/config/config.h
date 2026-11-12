@@ -3,22 +3,35 @@
 
 #include <Arduino.h>
 
-// --- НАЛАШТУВАННЯ ЕКРАНА ---
+// --- DISPLAY DIMENSIONS ---
 #define SCREEN_WIDTH  360
 #define SCREEN_HEIGHT 360
 
-// --- НАЛАШТУВАННЯ ДАТЧИКА DHT11 ---
-#define DHTPIN 4
-#define DHTTYPE DHT11    
+// --- DISPLAY SPI & CONTROL PINS (GC9B72) ---
+#define LCD_SCLK_PIN  12
+#define LCD_MOSI_PIN  11
+#define LCD_MISO_PIN  13
+#define LCD_DC_PIN    9
+#define LCD_CS_PIN    10
+#define LCD_RST_PIN   8
+#define LCD_BL_PIN    14
 
-// --- ПІНИ ДЛЯ КНОПКИ ТА СВІТЛОДІОДА ---
-#define BUTTON_PIN 18     // Кнопка (другий кінець на GND)
+// --- DISPLAY BACKLIGHT PWM ---
+#define LCD_BL_FREQ   12000  // 12 kHz anti-flicker frequency
+#define LCD_BL_CHAN   1      // PWM channel
 
-#define LED_R_PIN 17      // Червона ніжка
-#define LED_G_PIN 16      // Зелена ніжка
-#define LED_B_PIN 15      // Синя ніжка
+// --- DHT11 SENSOR SETTINGS ---
+#define DHTPIN        4
+#define DHTTYPE       DHT11    
 
-#define LEDC_BASE_FREQ 5000  // Частота ШІМ (5 кГц)
-#define LEDC_TIMER_RES 8     // Розрядність 8 біт (значення від 0 до 255)
+// --- BUTTON & RGB LED PINS ---
+#define BUTTON_PIN    18     // Pushbutton (connected to GND)
+
+#define LED_R_PIN     17     // Red channel pin
+#define LED_G_PIN     16     // Green channel pin
+#define LED_B_PIN     15     // Blue channel pin
+
+#define LEDC_BASE_FREQ 5000  // LED PWM frequency (5 kHz)
+#define LEDC_TIMER_RES 8     // 8-bit resolution (0 - 255)
 
 #endif // CONFIG_H

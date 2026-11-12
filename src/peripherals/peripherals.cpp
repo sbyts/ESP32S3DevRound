@@ -1,6 +1,5 @@
 #include "peripherals.h"
-#include "../config/config.h" 
-#include "../ui/ui_mod.h"     
+#include "../config/config.h"   
 #include <DHT.h>
 
 static DHT dht(DHTPIN, DHTTYPE);
@@ -40,25 +39,26 @@ void set_led_color(uint8_t r, uint8_t g, uint8_t b) {
   ledcWrite(LED_B_CHANNEL, b);
 }
 
-void check_button() {
-  static bool last_btn_state = HIGH;
-  bool current_state = digitalRead(BUTTON_PIN);
+// void check_button() {
+//   static bool last_btn_state = HIGH;
+//   bool current_state = digitalRead(BUTTON_PIN);
   
-  if (current_state == LOW && last_btn_state == HIGH) {
-    delay(50); // Антибрязкіт
-    if (digitalRead(BUTTON_PIN) == LOW) {
-      switch_to_next_screen(); 
-    }
-  }
-  last_btn_state = current_state;
-}
+//   if (current_state == LOW && last_btn_state == HIGH) {
+//     delay(50); // Антибрязкіт
+//     if (digitalRead(BUTTON_PIN) == LOW) {
+//       switch_to_next_screen(); 
+//     }
+//   }
+//   last_btn_state = current_state;
+// }
 
-void read_dht_sensor() {
-  static uint32_t last_dht_time = 0;
-  if (millis() - last_dht_time > 2500) {
-    last_dht_time = millis();
-    float humidity = dht.readHumidity();
-    float temperature = dht.readTemperature();
-    update_sensor_data(temperature, humidity);
-  }
-}
+// void read_dht_sensor() {
+//   static uint32_t last_dht_time = 0;
+//   if (millis() - last_dht_time > 2500) {
+//     last_dht_time = millis();
+//     float humidity = dht.readHumidity();
+//     float temperature = dht.readTemperature();
+//     update_sensor_data(temperature, humidity);
+//   }
+// }
+
