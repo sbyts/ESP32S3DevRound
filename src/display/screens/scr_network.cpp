@@ -1,6 +1,7 @@
 #include "scr_network.h"
 #include "../display_colors.h"
 #include "../../network/net_manager.h"
+#include "../../system/sys_logger.h"
 #include <WiFi.h>
 
 void draw_screen_network(LGFX_Sprite &spr) {
@@ -17,68 +18,62 @@ void draw_screen_network(LGFX_Sprite &spr) {
     // Header
     spr.setFont(&fonts::FreeSansBold12pt7b);
     spr.setTextColor(TFT_WHITE, TFT_BLACK);
-    spr.drawCenterString("NET & SYSTEM", cx, 42);
+    spr.drawCenterString("NET & SYSTEM", cx, 40);
 
     // Connection Status
     spr.setFont(&fonts::FreeSansBold9pt7b);
     if (connected) {
         spr.setTextColor(palette.lime.getRawCode(), TFT_BLACK);
-        spr.drawCenterString("STATUS: ONLINE (STA)", cx, 78);
+        spr.drawCenterString("STATUS: ONLINE (STA)", cx, 72);
     } else {
         spr.setTextColor(palette.grapefruit.getRawCode(), TFT_BLACK);
-        spr.drawCenterString("STATUS: AP SETUP MODE", cx, 78);
+        spr.drawCenterString("STATUS: AP SETUP MODE", cx, 72);
     }
 
     // Network & Weather Details Block
     spr.setFont(&fonts::Font0);
     spr.setTextSize(1);
     
-    // Row 1: Network
     spr.setTextColor(palette.grey.getRawCode(), TFT_BLACK);
-    spr.drawString("NETWORK:", 60, 108);
+    spr.drawString("NETWORK:", 60, 100);
     spr.setTextColor(TFT_WHITE, TFT_BLACK);
-    spr.drawString(connected ? WiFi.SSID() : "ClimateStation-AP", 125, 108);
+    spr.drawString(connected ? WiFi.SSID() : "ClimateStation-AP", 125, 100);
 
-    // Row 2: IP Address
     spr.setTextColor(palette.grey.getRawCode(), TFT_BLACK);
-    spr.drawString("IP ADDR:", 60, 122);
+    spr.drawString("IP ADDR:", 60, 113);
     spr.setTextColor(palette.cyan.getRawCode(), TFT_BLACK);
-    spr.drawString(connected ? WiFi.localIP().toString() : WiFi.softAPIP().toString(), 125, 122);
+    spr.drawString(connected ? WiFi.localIP().toString() : WiFi.softAPIP().toString(), 125, 113);
 
-    // Row 3: City & Weather API Status
     spr.setTextColor(palette.grey.getRawCode(), TFT_BLACK);
-    spr.drawString("WEATHER:", 60, 136);
+    spr.drawString("WEATHER:", 60, 126);
     String w_stat = net_service.getCity() + " -> " + net_service.getWeatherStatus();
     spr.setTextColor(w_stat.indexOf("OK") >= 0 ? palette.lime.getRawCode() : palette.grapefruit.getRawCode(), TFT_BLACK);
-    spr.drawString(w_stat, 125, 136);
+    spr.drawString(w_stat.substring(0, 30), 125, 126);
 
-    // Row 4: Signal & Free RAM
     spr.setTextColor(palette.grey.getRawCode(), TFT_BLACK);
-    spr.drawString("SYSTEM:", 60, 150);
+    spr.drawString("SYSTEM:", 60, 139);
     spr.setTextColor(TFT_WHITE, TFT_BLACK);
-    String sys_str = (connected ? String(WiFi.RSSI()) + " dBm" : "AP") + " | RAM: " + String(ESP.getFreeHeap() / 1024) + " KB";
-    spr.drawString(sys_str, 125, 150);
+    String sys_str = (connected ? String(WiFi.RSSI()) + " dBm" : "AP") + " | FREE: " + String(ESP.getFreeHeap() / 1024) + " KB";
+    spr.drawString(sys_str, 125, 139);
 
     // Divider before System Logs Area
-    spr.drawFastHLine(50, 168, 260, palette.dark_graphite.getRawCode());
+    spr.drawFastHLine(50, 155, 260, palette.dark_graphite.getRawCode());
     spr.setTextColor(palette.yellow.getRawCode(), TFT_BLACK);
-    spr.drawCenterString("SYSTEM LOGS (10 LINES BUFFER)", cx, 176);
+    spr.drawCenterString("LIVE SYSTEM LOGS (LAST 10)", cx, 162);
 
-    // Reserved 10-line console area
-    spr.drawRect(48, 190, 264, 114, palette.dark_graphite.getRawCode());
-    spr.setTextColor(palette.grey.getRawCode(), TFT_BLACK);
+    // 10-line live console box
+    spr.drawRect(46, 175, 268, 124, palette.dark_graphite.getRawCode());
     
-    spr.drawString("> [00:00:01] Display GC9B72 init OK", 54, 195);
-    spr.drawString("> [00:00:01] 8-bit Sprite allocated", 54, 206);
-    spr.drawString("> [00:00:02] DHT11 sensor ready", 54, 217);
-    
-    if (connected) {
-        spr.setTextColor(palette.cyan.getRawCode(), TFT_BLACK);
-        spr.drawString("> [NET] Wi-Fi connected, NTP active", 54, 228);
-        spr.setTextColor(w_stat.indexOf("OK") >= 0 ? palette.lime.getRawCode() : palette.grapefruit.getRawCode(), TFT_BLACK);
-        spr.drawString("> [API] " + w_stat, 54, 239);
-    } else {
-        spr.setTextColor(palette.grapefruit.getRawCode(), TFT_BLACK);
-        spr.drawString("> [NET] Setup via 192.168.4.1", 54, 228);
+    uint8_t total = sys_log.getCount();
+    for (uint8_t i = 0; i < total; i++) {
+        LogEntry item = sys_log.getEntry(i);
+        uint16_t line_col = palette.grey.getRawCode();
+        if (item.level == LOG_NET) line_col = palette.cyan.getRawCode();
+        else if (item.level == LOG_ERR) line_col = palette.grapefruit.getRawCode();
+
+        spr.setTextColor(line_col, TFT_BLACK);
+        // Trim line to 42 chars so it fits cleanly inside the circular display frame
+        String trimmed = item.text.substring(0, 42);
+        spr.drawString(trimmed, 52, 180 + (i * 11));
     }
 }

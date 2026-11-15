@@ -41,22 +41,23 @@ void draw_screen_analog_clock(LGFX_Sprite &spr) {
     uint8_t min  = has_ntp ? timeinfo->tm_min : ((10 + (uptime_sec / 60)) % 60);
     uint8_t sec  = has_ntp ? timeinfo->tm_sec : (uptime_sec % 60);
 
-    // 1. Minimalist 12 Hour Index Markers (Cardinal ticks in brighter dark_graphite, minor ticks in grey)
+    uint16_t tick_col = palette.dark_graphite.getRawCode();
+
+    // 1. Minimalist 12 Hour Index Markers (All ticks in unified dark_graphite color)
     for (int i = 0; i < 12; i++) {
         float rad = ((i * 30.0f) - 90.0f) * DEG_TO_RAD;
         bool is_cardinal = (i % 3 == 0); // 12, 3, 6, 9 o'clock
         
         float outer_r = 164.0f;
         float inner_r = is_cardinal ? 142.0f : 152.0f;
-        float thick   = is_cardinal ? 6.0f : 3.0f;
-        uint16_t col  = is_cardinal ? palette.dark_graphite.getRawCode() : palette.grey.getRawCode();
+        float thick   = is_cardinal ? 6.0f : 4.0f;
 
         float x1 = cx + cos(rad) * inner_r;
         float y1 = cy + sin(rad) * inner_r;
         float x2 = cx + cos(rad) * outer_r;
         float y2 = cy + sin(rad) * outer_r;
 
-        draw_rounded_capsule(spr, x1, y1, x2, y2, thick, col);
+        draw_rounded_capsule(spr, x1, y1, x2, y2, thick, tick_col);
     }
 
     // 2. Smooth angles for Hour and Minute hands
@@ -66,17 +67,17 @@ void draw_screen_analog_clock(LGFX_Sprite &spr) {
     float hour_rad = (hour_angle - 90.0f) * DEG_TO_RAD;
     float min_rad  = (min_angle - 90.0f) * DEG_TO_RAD;
 
-    // 3. Hour Hand: Thick Cyan rounded capsule with subtle counterweight
+    // 3. Hour Hand: 16px thick Cyan rounded capsule (matching outer arc width on Screen 1)
     float hx1 = cx - cos(hour_rad) * 18.0f;
     float hy1 = cy - sin(hour_rad) * 18.0f;
     float hx2 = cx + cos(hour_rad) * 86.0f;
     float hy2 = cy + sin(hour_rad) * 86.0f;
-    draw_rounded_capsule(spr, hx1, hy1, hx2, hy2, 12.0f, palette.cyan.getRawCode());
+    draw_rounded_capsule(spr, hx1, hy1, hx2, hy2, 16.0f, palette.cyan.getRawCode());
 
-    // 4. Minute Hand: Sleek Grapefruit rounded capsule layered cleanly on top
+    // 4. Minute Hand: 10px thick Grapefruit rounded capsule (matching inner arc width on Screen 1)
     float mx1 = cx - cos(min_rad) * 22.0f;
     float my1 = cy - sin(min_rad) * 22.0f;
     float mx2 = cx + cos(min_rad) * 128.0f;
     float my2 = cy + sin(min_rad) * 128.0f;
-    draw_rounded_capsule(spr, mx1, my1, mx2, my2, 9.0f, palette.grapefruit.getRawCode());
+    draw_rounded_capsule(spr, mx1, my1, mx2, my2, 10.0f, palette.grapefruit.getRawCode());
 }

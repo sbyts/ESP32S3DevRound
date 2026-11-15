@@ -1,5 +1,6 @@
 #include "scr_weather.h"
 #include "../display_colors.h"
+#include <sys/time.h>
 #include <time.h>
 #include <math.h>
 
@@ -23,7 +24,6 @@ static uint16_t get_temp_color(float temp, bool is_indoor)
     }
 }
 
-// Helper vector primitives for weather icon builder
 static void draw_sun(LGFX_Sprite &spr, int32_t sx, int32_t sy, int32_t r)
 {
     spr.fillCircle(sx, sy, r, palette.yellow.getRawCode());
@@ -38,9 +38,7 @@ static void draw_sun(LGFX_Sprite &spr, int32_t sx, int32_t sy, int32_t r)
 static void draw_moon(LGFX_Sprite &spr, int32_t mx, int32_t my, int32_t r)
 {
     spr.fillCircle(mx, my, r, palette.yellow.getRawCode());
-    // Cut out crescent using black circle offset
     spr.fillCircle(mx + (r / 2), my - (r / 3), r - 1, TFT_BLACK);
-    // Tiny twinkling stars
     spr.drawPixel(mx - r - 3, my - 4, TFT_WHITE);
     spr.drawPixel(mx + r + 2, my + 5, palette.cyan.getRawCode());
 }
@@ -53,10 +51,8 @@ static void draw_cloud(LGFX_Sprite &spr, int32_t x, int32_t y, uint16_t color)
     spr.fillRect(x - 10, y + 4, 20, 7, color);
 }
 
-// Smart Day/Night & Multi-Condition Icon + Status Label Renderer
 static void draw_dynamic_weather_header(LGFX_Sprite &spr, int32_t icon_x, int32_t icon_y, const String &raw_cond)
 {
-    // Check current hour from internal RTC (Night = 21:00 .. 05:59)
     time_t now;
     time(&now);
     struct tm *t = localtime(&now);
@@ -68,22 +64,18 @@ static void draw_dynamic_weather_header(LGFX_Sprite &spr, int32_t icon_x, int32_
     String short_label = "CLOUDY";
     uint16_t label_col = palette.yellow.getRawCode();
 
-    // 1. THUNDERSTORM
     if (cond.indexOf("thunder") >= 0 || cond.indexOf("storm") >= 0)
     {
         draw_cloud(spr, icon_x, icon_y - 2, palette.grey.getRawCode());
-        // Yellow lightning bolt
         spr.drawLine(icon_x + 1, icon_y + 6, icon_x - 3, icon_y + 13, palette.yellow.getRawCode());
         spr.drawLine(icon_x - 3, icon_y + 13, icon_x + 2, icon_y + 13, palette.yellow.getRawCode());
         spr.drawLine(icon_x + 2, icon_y + 13, icon_x - 2, icon_y + 20, palette.yellow.getRawCode());
         short_label = "STORM";
         label_col = palette.yellow.getRawCode();
     }
-    // 2. SNOW / SLEET / ICE
     else if (cond.indexOf("snow") >= 0 || cond.indexOf("sleet") >= 0 || cond.indexOf("blizzard") >= 0 || cond.indexOf("ice") >= 0)
     {
         draw_cloud(spr, icon_x, icon_y - 3, TFT_WHITE);
-        // Falling snowflakes
         uint16_t snow_col = palette.cyan.getRawCode();
         spr.fillCircle(icon_x - 6, icon_y + 13, 2, TFT_WHITE);
         spr.fillCircle(icon_x + 1, icon_y + 16, 2, snow_col);
@@ -91,11 +83,9 @@ static void draw_dynamic_weather_header(LGFX_Sprite &spr, int32_t icon_x, int32_
         short_label = "SNOW";
         label_col = palette.cyan.getRawCode();
     }
-    // 3. RAIN / DRIZZLE / SHOWER
     else if (cond.indexOf("rain") >= 0 || cond.indexOf("drizzle") >= 0 || cond.indexOf("shower") >= 0)
     {
         draw_cloud(spr, icon_x, icon_y - 3, palette.grey.getRawCode());
-        // Diagonal cyan rain drops
         uint16_t rain_col = palette.cyan.getRawCode();
         spr.drawLine(icon_x - 6, icon_y + 10, icon_x - 9, icon_y + 16, rain_col);
         spr.drawLine(icon_x + 1, icon_y + 10, icon_x - 2, icon_y + 16, rain_col);
@@ -103,7 +93,6 @@ static void draw_dynamic_weather_header(LGFX_Sprite &spr, int32_t icon_x, int32_
         short_label = "RAIN";
         label_col = palette.cyan.getRawCode();
     }
-    // 4. FOG / MIST / HAZE
     else if (cond.indexOf("fog") >= 0 || cond.indexOf("mist") >= 0 || cond.indexOf("haze") >= 0)
     {
         draw_cloud(spr, icon_x, icon_y - 4, palette.grey.getRawCode());
@@ -112,7 +101,6 @@ static void draw_dynamic_weather_header(LGFX_Sprite &spr, int32_t icon_x, int32_
         short_label = "FOG";
         label_col = palette.grey.getRawCode();
     }
-    // 5. CLEAR / SUNNY (Adapts to Day Sun vs Night Crescent Moon)
     else if (cond.indexOf("clear") >= 0 || cond.indexOf("sunny") >= 0)
     {
         if (is_night)
@@ -128,7 +116,6 @@ static void draw_dynamic_weather_header(LGFX_Sprite &spr, int32_t icon_x, int32_
             label_col = palette.yellow.getRawCode();
         }
     }
-    // 6. PARTLY CLOUDY (Day Sun+Cloud vs Night Moon+Cloud)
     else if (cond.indexOf("partly") >= 0)
     {
         if (is_night)
@@ -145,7 +132,6 @@ static void draw_dynamic_weather_header(LGFX_Sprite &spr, int32_t icon_x, int32_
         }
         draw_cloud(spr, icon_x, icon_y, TFT_WHITE);
     }
-    // 7. OVERCAST / CLOUDY (Default)
     else
     {
         draw_cloud(spr, icon_x + 5, icon_y - 4, palette.grey.getRawCode());
@@ -154,7 +140,6 @@ static void draw_dynamic_weather_header(LGFX_Sprite &spr, int32_t icon_x, int32_
         label_col = TFT_WHITE;
     }
 
-    // Draw clean status label next to the icon
     spr.setFont(&fonts::FreeSansBold9pt7b);
     spr.setTextSize(1);
     spr.setTextColor(label_col, TFT_BLACK);
@@ -214,10 +199,12 @@ void draw_screen_weather(LGFX_Sprite &spr, float target_in_temp, float disp_in_t
                      cx + cos(rad) * 131, cy + sin(rad) * 131, tick_col);
     }
 
-    // 4. Grid Dividers
-    spr.drawFastHLine(100, 198, 160, palette.grey.getRawCode());
-    spr.drawFastHLine(100, 232, 160, palette.grey.getRawCode());
-    spr.drawFastVLine(185, 238, 46, palette.grey.getRawCode());
+    // 4. Grid Structural Dividers (Adjusted bottom spacing to give the clock pill breathing room)
+    spr.drawFastHLine(100, 198, 160, palette.grey.getRawCode()); // Top Wind line
+    spr.drawFastHLine(100, 230, 160, palette.grey.getRawCode()); // Bottom Wind line
+    spr.drawFastVLine(185, 234, 38, palette.grey.getRawCode());  // Center split between Temp & Humidity
+    spr.drawFastHLine(115, 275, 130, palette.grey.getRawCode()); // Top Location line
+    spr.drawFastHLine(130, 303, 100, palette.grey.getRawCode()); // Bottom Location line
 
     // 5. Dynamic Day/Night Weather Icon & Status Label
     draw_dynamic_weather_header(spr, 132, 118, condition);
@@ -239,25 +226,59 @@ void draw_screen_weather(LGFX_Sprite &spr, float target_in_temp, float disp_in_t
     spr.drawCircle(deg_x, 152, 3, TFT_WHITE);
     spr.drawString("C", start_x + num_w + deg_space, 145);
 
-    // 7. Live Wind Speed Row (in m/s)
+    // 7. Live Wind Speed Row
     spr.setFont(&fonts::FreeSansBold9pt7b);
     spr.setTextColor(palette.grey.getRawCode(), TFT_BLACK);
     String wind_label = "WIND: " + String(wind_ms, 1) + " m/s";
-    spr.drawCenterString(wind_label.c_str(), 180, 206);
+    spr.drawCenterString(wind_label.c_str(), cx, 206);
 
-    // 8. Left Bottom Section: Outdoor Temperature from Internet (Integer)
-    spr.setTextColor(inner_col, TFT_BLACK);
-    String out_t_label = "out: " + String((int)round(target_out_temp)) + "C";
-    spr.drawString(out_t_label.c_str(), 100, 252);
-    // 9. Right Bottom Section: Stacked Outdoor & Indoor Humidity (Integer)
+    // 8. Left Bottom Section: Pure Outdoor Temperature centered in left cell (X = 138)
+    int out_int = (int)round(target_out_temp);
+    String signed_temp = (out_int > 0 ? "+" : "") + String(out_int);
+
+    spr.setFont(&fonts::FreeSansBold12pt7b);
+    int32_t val_w = spr.textWidth(signed_temp.c_str());
+    spr.setFont(&fonts::FreeSansBold9pt7b);
+    int32_t unit_w = 10 + spr.textWidth("C");
+    int32_t cur_x = 138 - ((val_w + unit_w) / 2);
+    int32_t base_y = 246;
+    uint16_t cyan_col = palette.cyan.getRawCode();
+    spr.setFont(&fonts::FreeSansBold12pt7b);
+    spr.setTextColor(cyan_col, TFT_BLACK);
+    spr.drawString(signed_temp.c_str(), cur_x, base_y - 2);
+    cur_x += val_w;
+    spr.setFont(&fonts::FreeSansBold9pt7b);
+    spr.drawCircle(cur_x + 3, base_y + 3, 2, cyan_col);
+    spr.setTextColor(cyan_col, TFT_BLACK);
+    spr.drawString("C", cur_x + 7, base_y + 2);
+    // 9. Right Bottom Section: Stacked Outdoor & Indoor Humidity (X = 196, Y = 236 & 256)
     spr.setTextColor(palette.cyan.getRawCode(), TFT_BLACK);
     String hum_out_label = "out: " + String((int)round(out_hum)) + "%";
-    spr.drawString(hum_out_label.c_str(), 195, 240);
+    spr.drawString(hum_out_label.c_str(), 196, 236);
     spr.setTextColor(palette.grapefruit.getRawCode(), TFT_BLACK);
     String hum_in_label = "in: " + String((int)round(in_hum)) + "%";
-    spr.drawString(hum_in_label.c_str(), 195, 264);
-    // 10. Bottom Location Banner
-    spr.setTextColor(palette.cyan.getRawCode(), TFT_BLACK);
-    spr.drawCenterString(location.c_str(), 180, 304);
+    spr.drawString(hum_in_label.c_str(), 196, 256);
+    // 10. Location Banner (Grey color, centered in 275..303 row -> Y = 281)
+    spr.setTextColor(palette.grey.getRawCode(), TFT_BLACK);
+    spr.drawCenterString(location.c_str(), cx, 281);
+    // 11. Digital Clock inside a Dark Graphite Rounded Pill Badge (matching arc end-caps)
+    time_t now;
+    time(&now);
+    struct tm *t = localtime(&now);
+    bool has_ntp = (t->tm_year > (2020 - 1900));
+    uint8_t h = has_ntp ? t->tm_hour : ((14 + (millis() / 3600000)) % 24);
+    uint8_t m = has_ntp ? t->tm_min : ((millis() / 60000) % 60);
+    String clock_str = (h < 10 ? "0" : "") + String(h) + ":" + (m < 10 ? "0" : "") + String(m);
+    int32_t pill_w = 94;
+    int32_t pill_h = 28;
+    int32_t pill_x = cx - (pill_w / 2);
+    int32_t pill_y = 315;
+    uint16_t pill_bg = palette.dark_graphite.getRawCode();
+    // Rounded capsule background (radius = pill_h / 2 = 14)
+    spr.fillRoundRect(pill_x, pill_y, pill_w, pill_h, pill_h / 2, pill_bg);
+    // Crisp grey time digits centered vertically inside the graphite pill
+    spr.setFont(&fonts::FreeSansBold12pt7b);
+    spr.setTextColor(palette.grey.getRawCode(), pill_bg);
+    spr.drawCenterString(clock_str.c_str(), cx, pill_y + 5);
     spr.setFont(&fonts::Font0);
 }

@@ -63,7 +63,7 @@ public:
         grapefruit    = DisplayColor(lcd.color565(44, 90, 252),  "GRAPEFRUIT", "252,90,44");
         cyan          = DisplayColor(lcd.color565(255, 190, 0),  "CYAN",       "255,190,0");
         yellow        = DisplayColor(lcd.color565(0, 255, 255),  "YELLOW",     "0,255,255");
-        dark_graphite = DisplayColor(lcd.color565(48, 48, 36),   "DK_GREY",    "48, 48, 36");
+        dark_graphite = DisplayColor(lcd.color565(45, 45, 20),   "DK_GREY",    "45, 45, 20");
 
         // Pack into structured iterable arrays
         core_list[0] = blue;
