@@ -31,6 +31,10 @@ private:
     uint32_t _boot_count;
     
     bool _is_connected;
+    bool _radar_enabled;
+    bool _eco_wifi_off;
+    bool _wifi_suspended;
+    
     unsigned long _last_weather_update;
     const unsigned long WEATHER_INTERVAL = 900000;
 
@@ -43,12 +47,16 @@ private:
 
 public:
     NetManager() : _server(80), _net_count(0), _weather_status("INIT..."), 
-                   _boot_count(0), _is_connected(false), _last_weather_update(0) {}
+                   _boot_count(0), _is_connected(false), _radar_enabled(false),
+                   _eco_wifi_off(false), _wifi_suspended(false), _last_weather_update(0) {}
 
     void init();
     void process();
+    void setEcoMode(bool enable_eco, bool deep_wifi_off);
     
     bool isConnected() const { return _is_connected; }
+    bool isRadarEnabled() const { return _radar_enabled; }
+    bool isEcoWifiOff() const { return _eco_wifi_off; }
     String getCity() const { return _city; }
     String getWeatherStatus() const { return _weather_status; }
 };

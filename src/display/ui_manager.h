@@ -14,7 +14,7 @@ private:
     float _target_indoor_temp;
     float _display_indoor_temp;
     float _indoor_hum;
-
+    bool _is_sleeping;
     float _target_outdoor_temp;
     float _display_outdoor_temp;
     float _outdoor_hum;
@@ -34,7 +34,8 @@ public:
 
     void init();
     void nextScreen();
-    
+    void setPowerSave(bool sleep);
+    bool isSleeping() const { return _is_sleeping; }
     void setIndoorData(float temp, float hum, bool force_redraw = false);
     void setOutdoorData(float temp, float hum, float wind_ms, const char* condition = nullptr, const char* location = nullptr);
     

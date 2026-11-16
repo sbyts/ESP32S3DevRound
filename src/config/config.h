@@ -30,7 +30,7 @@
 #define LED_R_PIN     17     // Red channel pin
 #define LED_G_PIN     16     // Green channel pin
 #define LED_B_PIN     15     // Blue channel pin
-
+#define PIN_RADAR_OUT 6
 #define LEDC_BASE_FREQ 5000  // LED PWM frequency (5 kHz)
 #define LEDC_TIMER_RES 8     // 8-bit resolution (0 - 255)
 

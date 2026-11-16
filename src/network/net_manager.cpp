@@ -1,6 +1,7 @@
 #include "net_manager.h"
 #include "web_ui.h"
 #include "../display/ui_manager.h"
+#include "../peripherals/radar_ld2410.h"
 #include "../system/sys_logger.h"
 #include "esp_sntp.h"
 
@@ -30,6 +31,11 @@ void NetManager::loadSettings()
     _city = _prefs.getString("city", "Kyiv");
     _admin_pass = _prefs.getString("admin_pass", "admin");
 
+    // Disabled by default so the screen stays ON until enabled via Web UI
+    _radar_enabled = _prefs.getBool("radar_en", false);
+    _eco_wifi_off = _prefs.getBool("eco_wifi", false);
+    _wifi_suspended = false;
+
     _net_count = 0;
     for (uint8_t i = 0; i < MAX_WIFI_NETWORKS; i++)
     {
@@ -44,7 +50,7 @@ void NetManager::loadSettings()
         }
     }
 
-    // Migrate old single-SSID setting safely without square brackets
+    // Migrate legacy single-SSID setting safely
     if (_net_count == 0)
     {
         String legacy_ssid = _prefs.getString("ssid", "");
@@ -134,6 +140,7 @@ bool NetManager::connectToBestAvailableWiFi()
 void NetManager::init()
 {
     loadSettings();
+    radar.init(_radar_enabled, _eco_wifi_off);
 
     String upper_city = _city;
     upper_city.toUpperCase();
@@ -162,6 +169,45 @@ void NetManager::init()
     setupWebServer();
 }
 
+void NetManager::setEcoMode(bool enable_eco, bool deep_wifi_off)
+{
+    if (enable_eco)
+    {
+        if (deep_wifi_off)
+        {
+            if (!_wifi_suspended && _is_connected)
+            {
+                _wifi_suspended = true;
+                WiFi.disconnect(true);
+                WiFi.mode(WIFI_OFF);
+            }
+        }
+        else
+        {
+            if (_is_connected)
+            {
+                WiFi.setSleep(true);
+            }
+        }
+    }
+    else
+    {
+        if (_wifi_suspended)
+        {
+            _wifi_suspended = false;
+            if (connectToBestAvailableWiFi())
+            {
+                _is_connected = true;
+                sys_log.log("Wi-Fi restored: " + WiFi.localIP().toString(), LOG_NET);
+            }
+        }
+        else if (_is_connected)
+        {
+            WiFi.setSleep(false);
+        }
+    }
+}
+
 bool NetManager::checkAuth(AsyncWebServerRequest *request)
 {
     if (!request->authenticate("admin", _admin_pass.c_str()))
@@ -177,54 +223,70 @@ void NetManager::setupWebServer()
     _server.on("/", HTTP_GET, [this](AsyncWebServerRequest *request)
                {
         if (!checkAuth(request)) return;
-        request->send(200, "text/html", INDEX_HTML); });
+        AsyncResponseStream *response = request->beginResponseStream("text/html");
+        response->print(FPSTR(WEB_HTML_HEAD));
+        response->print(FPSTR(WEB_CSS));
+        response->print(FPSTR(WEB_HTML_BODY));
+        response->print(FPSTR(WEB_JS));
+        response->print(FPSTR(WEB_HTML_FOOT));
+        request->send(response); });
 
     _server.on("/api/telemetry", HTTP_GET, [this](AsyncWebServerRequest *request)
                {
         if (!checkAuth(request)) return;
 
-        JsonDocument doc;
-        doc["ip"] = (WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
-        doc["uptime"] = formatUptime(millis() / 1000);
-
+        AsyncResponseStream *res = request->beginResponseStream("application/json");
+        String ip_str = (WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
         uint32_t total_kb = ESP.getHeapSize() / 1024;
         uint32_t free_kb  = ESP.getFreeHeap() / 1024;
-        doc["total_kb"] = total_kb;
-        doc["free_kb"]  = free_kb;
-        doc["used_kb"]  = total_kb - free_kb;
-        doc["min_kb"]   = ESP.getMinFreeHeap() / 1024;
-        doc["cpu"]      = ESP.getCpuFreqMHz();
-        doc["temp"]     = String(temperatureRead(), 1);
-        doc["rssi"]     = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0;
-        doc["boots"]    = _boot_count;
 
-        JsonArray logs_arr = doc["logs"].to<JsonArray>();
-        for (uint8_t i = 0; i < sys_log.getCount(); i++) {
+        res->print("{");
+        res->printf("\"ip\":\"%s\",", ip_str.c_str());
+        res->printf("\"uptime\":\"%s\",", formatUptime(millis() / 1000).c_str());
+        res->printf("\"total_kb\":%u,", total_kb);
+        res->printf("\"free_kb\":%u,", free_kb);
+        res->printf("\"used_kb\":%u,", total_kb - free_kb);
+        res->printf("\"min_kb\":%u,", ESP.getMinFreeHeap() / 1024);
+        res->printf("\"cpu\":%u,", ESP.getCpuFreqMHz());
+        res->printf("\"temp\":\"%.1f\",", temperatureRead());
+        res->printf("\"rssi\":%d,", (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0);
+        res->printf("\"boots\":%u,", _boot_count);
+        res->print("\"logs\":[");
+
+        uint8_t cnt = sys_log.getCount();
+        for (uint8_t i = 0; i < cnt; i++) {
             LogEntry entry = sys_log.getEntry(i);
-            JsonObject obj = logs_arr.add<JsonObject>();
-            obj["txt"] = entry.text;
-            obj["lvl"] = (int)entry.level;
+            String clean_txt = entry.text;
+            clean_txt.replace("\\", "\\\\");
+            clean_txt.replace("\"", "'");
+            res->printf("{\"txt\":\"%s\",\"lvl\":%d}", clean_txt.c_str(), (int)entry.level);
+            if (i + 1 < cnt) res->print(",");
         }
-
-        String response;
-        serializeJson(doc, response);
-        request->send(200, "application/json", response); });
+        res->print("]}");
+        request->send(res); });
 
     _server.on("/api/config", HTTP_GET, [this](AsyncWebServerRequest *request)
                {
         if (!checkAuth(request)) return;
 
-        JsonDocument doc;
-        doc["city"] = _city;
-        JsonArray nets = doc["networks"].to<JsonArray>();
-        for (uint8_t i = 0; i < _net_count; i++) {
-            JsonObject n = nets.add<JsonObject>();
-            n["ssid"] = _networks[i].ssid;
-        }
+        AsyncResponseStream *res = request->beginResponseStream("application/json");
+        String clean_city = _city;
+        clean_city.replace("\"", "'");
 
-        String response;
-        serializeJson(doc, response);
-        request->send(200, "application/json", response); });
+        res->print("{");
+        res->printf("\"city\":\"%s\",", clean_city.c_str());
+        res->printf("\"radar_en\":%s,", _radar_enabled ? "true" : "false");
+        res->printf("\"eco_wifi\":%s,", _eco_wifi_off ? "true" : "false");
+        res->print("\"networks\":[");
+
+        for (uint8_t i = 0; i < _net_count; i++) {
+            String clean_ssid = _networks[i].ssid;
+            clean_ssid.replace("\"", "'");
+            res->printf("{\"ssid\":\"%s\"}", clean_ssid.c_str());
+            if (i + 1 < _net_count) res->print(",");
+        }
+        res->print("]}");
+        request->send(res); });
 
     _server.on("/api/save", HTTP_POST, [this](AsyncWebServerRequest *request)
                {
@@ -236,128 +298,151 @@ void NetManager::setupWebServer()
         JsonDocument doc;
         DeserializationError err = deserializeJson(doc, data, len);
         if (!err) {
-            if (doc["city"].is<String>()) {
-                String new_city = doc["city"].as<String>();
-                if (new_city.length() > 0) _prefs.putString("city", new_city);
+            const char* new_city = doc["city"] | "";
+            if (strlen(new_city) > 0) {
+                _prefs.putString("city", new_city);
             }
-            if (doc["admin_pass"].is<String>()) {
-                String new_pass = doc["admin_pass"].as<String>();
-                if (new_pass.length() > 0) _prefs.putString("admin_pass", new_pass);
+
+            const char* new_pass = doc["admin_pass"] | "";
+            if (strlen(new_pass) > 0) {
+                _prefs.putString("admin_pass", new_pass);
             }
+
+            if (!doc["radar_en"].isNull()) {
+                _radar_enabled = doc["radar_en"] | false;
+                _prefs.putBool("radar_en", _radar_enabled);
+            }
+
+            if (!doc["eco_wifi"].isNull()) {
+                _eco_wifi_off = doc["eco_wifi"] | false;
+                _prefs.putBool("eco_wifi", _eco_wifi_off);
+            }
+
             if (doc["networks"].is<JsonArray>()) {
                 JsonArray arr = doc["networks"].as<JsonArray>();
-                _net_count = 0;
+                WifiCreds updated_nets[MAX_WIFI_NETWORKS];
+                uint8_t updated_count = 0;
+
                 for (JsonObject n : arr) {
-                    if (_net_count < MAX_WIFI_NETWORKS) {
-                        String s = n["ssid"].as<String>();
-                        String p = n["pass"].as<String>();
+                    if (updated_count < MAX_WIFI_NETWORKS) {
+                        String s = String(n["ssid"] | "");
+                        String p = String(n["pass"] | "");
                         if (s.length() > 0) {
-                            _networks[_net_count].ssid = s;
-                            if (p.length() == 0) {
-                                for (uint8_t k = 0; k < MAX_WIFI_NETWORKS; k++) {
-                                    if (_prefs.getString(("ssid_" + String(k)).c_str(), "") == s) {
-                                        p = _prefs.getString(("pass_" + String(k)).c_str(), "");
+                            updated_nets[updated_count].ssid = s;
+                            if (p.length() > 0) {
+                                updated_nets[updated_count].pass = p;
+                            } else {
+                                String existing_pass = "";
+                                for (uint8_t k = 0; k < _net_count; k++) {
+                                    if (_networks[k].ssid == s) {
+                                        existing_pass = _networks[k].pass;
                                         break;
                                     }
                                 }
+                                updated_nets[updated_count].pass = existing_pass;
                             }
-                            _networks[_net_count].pass = p;
-                            _net_count++;
+                            updated_count++;
                         }
                     }
+                }
+
+                _net_count = updated_count;
+                for (uint8_t i = 0; i < _net_count; i++) {
+                    _networks[i] = updated_nets[i];
                 }
                 saveNetworksToPrefs();
             }
             sys_log.log("Web config saved. Rebooting...", LOG_NET);
             delay(500);
             ESP.restart();
-        } });
-
+        
+// -----
+} });
     _server.begin();
     sys_log.log("Web Server started (Auth ON)", LOG_INFO);
 }
-
-void NetManager::fetchSimpleWeather() {
-    if (WiFi.status() != WL_CONNECTED) {
+void NetManager::fetchSimpleWeather()
+{
+    if (WiFi.status() != WL_CONNECTED)
+    {
         _weather_status = "OFFLINE";
         return;
     }
-
     HTTPClient http;
     http.setTimeout(3000);
     http.setReuse(false);
     http.setUserAgent("curl/7.68.0");
-
     String clean_city = _city;
     clean_city.replace(" ", "+");
-    
-    // Added 'm' parameter (?m&format=...) to strictly force Metric units (°C, km/h)
+    // Force metric units (?m) so wttr.in always returns Celsius and km/h
     String uri = "/" + clean_city + "?m&format=%t|%h|%w|%C";
-
-    if (http.begin("wttr.in", 80, uri)) {
+    if (http.begin("wttr.in", 80, uri))
+    {
         int httpCode = http.GET();
-        if (httpCode == 200) {
+        if (httpCode == 200)
+        {
             String payload = http.getString();
             payload.trim();
             http.end();
-
             int sep1 = payload.indexOf('|');
             int sep2 = payload.indexOf('|', sep1 + 1);
             int sep3 = payload.indexOf('|', sep2 + 1);
-            
-            if (sep1 > 0 && sep2 > sep1 && sep3 > sep2) {
+            if (sep1 > 0 && sep2 > sep1 && sep3 > sep2)
+            {
                 String temp_str = payload.substring(0, sep1);
-                String hum_str  = payload.substring(sep1 + 1, sep2);
+                String hum_str = payload.substring(sep1 + 1, sep2);
                 String wind_str = payload.substring(sep2 + 1, sep3);
                 String cond_str = payload.substring(sep3 + 1);
                 cond_str.trim();
-
                 bool is_fahrenheit = (temp_str.indexOf('F') >= 0);
                 temp_str.replace("+", "");
                 temp_str.replace("°C", "");
                 temp_str.replace("°F", "");
                 temp_str.replace("°", "");
                 hum_str.replace("%", "");
-
                 String clean_wind = "";
-                for (size_t i = 0; i < wind_str.length(); i++) {
+                for (size_t i = 0; i < wind_str.length(); i++)
+                {
                     char c = wind_str.charAt(i);
-                    if (isDigit(c) || c == '.') clean_wind += c;
+                    if (isDigit(c) || c == '.')
+                        clean_wind += c;
                 }
-                
                 float out_temp = temp_str.toFloat();
-                if (is_fahrenheit) {
+                if (is_fahrenheit)
+                {
                     out_temp = (out_temp - 32.0f) * 5.0f / 9.0f;
                 }
-
-                float out_hum  = hum_str.toFloat();
-                float wind_ms  = clean_wind.toFloat() / 3.6f;
-
+                float out_hum = hum_str.toFloat();
+                float wind_ms = clean_wind.toFloat() / 3.6f;
                 String upper_city = _city;
                 upper_city.toUpperCase();
-                
                 ui.setOutdoorData(out_temp, out_hum, wind_ms, cond_str.c_str(), upper_city.c_str());
                 _weather_status = "OK: " + cond_str + " (" + String((int)round(out_temp)) + "C)";
                 sys_log.log("Weather: " + upper_city + " " + String((int)round(out_temp)) + "C", LOG_NET);
-            } else {
+            }
+            else
+            {
                 _weather_status = "BAD FORMAT";
                 sys_log.log("Weather parse error", LOG_ERR);
             }
-        } else {
+        }
+        else
+        {
             _weather_status = "HTTP ERR: " + String(httpCode);
             sys_log.log("Weather HTTP " + String(httpCode), LOG_ERR);
             http.end();
         }
-    } else {
+    }
+    else
+    {
         _weather_status = "CONN FAILED";
         sys_log.log("Weather conn failed", LOG_ERR);
     }
     _last_weather_update = millis();
 }
-
 void NetManager::process()
 {
-    if (WiFi.status() == WL_CONNECTED)
+    if (WiFi.status() == WL_CONNECTED && !_wifi_suspended)
     {
         if (millis() - _last_weather_update > WEATHER_INTERVAL)
         {

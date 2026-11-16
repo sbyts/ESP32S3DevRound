@@ -2,61 +2,83 @@
 #include "config/config.h"
 #include "display/display_lgfx.h"
 #include "display/ui_manager.h"
-#include "peripherals/sensor_dht.h"
 #include "network/net_manager.h"
+#include "peripherals/sensor_dht.h"
+#include "peripherals/radar_ld2410.h"
+#include "system/sys_logger.h"
 
+// Global LovyanGFX display instance matching display_lgfx.h
 LGFX_GC9B72 lcd;
 
-void check_button() {
-    static bool last_btn_state = HIGH;
-    static unsigned long last_debounce_time = 0;
-    
-    bool current_state = digitalRead(BUTTON_PIN);
-    
-    if (current_state == LOW && last_btn_state == HIGH) {
-        if (millis() - last_debounce_time > 180) {
-            last_debounce_time = millis();
-            ui.nextScreen();
+// Button debounce variables
+static bool last_btn_state = HIGH;
+static unsigned long last_debounce_time = 0;
+const unsigned long DEBOUNCE_DELAY = 50;
+
+void handlePhysicalButton() {
+    bool reading = digitalRead(BUTTON_PIN);
+
+    if (reading != last_btn_state) {
+        last_debounce_time = millis();
+    }
+
+    if ((millis() - last_debounce_time) > DEBOUNCE_DELAY) {
+        static bool stable_btn_state = HIGH;
+        if (reading != stable_btn_state) {
+            stable_btn_state = reading;
+
+            // Trigger on button press (active LOW with INPUT_PULLUP)
+            if (stable_btn_state == LOW) {
+                bool was_sleeping = ui.isSleeping() || radar.isEcoActive();
+
+                // Always force wake-up on button press so the screen never stays dark
+                radar.manualWake();
+                sys_log.log("Button press -> Screen ON", LOG_INFO);
+
+                // Switch to the next screen only if the display was already awake
+                if (!was_sleeping) {
+                    ui.nextScreen();
+                }
+            }
         }
     }
-    last_btn_state = current_state;
+    last_btn_state = reading;
 }
 
 void setup() {
     Serial.begin(115200);
-    delay(150);
+    delay(200);
 
+    sys_log.log("Booting Climate Core OS...", LOG_INFO);
+
+    // 1. Configure tactile navigation & wake button (GPIO 18)
     pinMode(BUTTON_PIN, INPUT_PULLUP);
 
-    lcd.init();
-    lcd.setRotation(0);
-    lcd.setBrightness(180);
-    lcd.clear(TFT_BLACK);
-
+    // 2. Initialize 360x360 round IPS display & 8-bit sprite BEFORE Wi-Fi to avoid heap fragmentation
     ui.init();
-    climate_sensor.init();
+    sys_log.log("Display GC9B72 (8-bit) OK", LOG_INFO);
 
-    // 1. Set fallback defaults BEFORE network init
-    ui.setIndoorData(23.0f, 45.0f, false);
-    ui.setOutdoorData(18.0f, 75.0f, 0.0f, "CLOUDY", "LOADING...");
+    // 3. Initialize indoor DHT11 sensor (GPIO 4)
+    init_dht_sensor();
+    sys_log.log("DHT11 Sensor on GPIO4 OK", LOG_INFO);
 
-    // 2. Network init will overwrite defaults with real saved city & live weather
+    // 4. Initialize Wi-Fi (6 slots), NTP, HTTP Weather, Web Server & Radar (GPIO 6, OFF by default)
     net_service.init();
 }
 
 void loop() {
-    check_button();
+    // 1. Monitor HLK-LD2410 presence radar & manage Eco Power-Save mode
+    radar.update();
 
-    // Tick smooth 60 FPS animations for active screen
-    ui.tickAnimation();
+    // 2. Handle tactile navigation / wake button
+    handlePhysicalButton();
 
-    // Read room sensor and update outer grapefruit arc
-    if (climate_sensor.process()) {
-        ui.setIndoorData(climate_sensor.getTemperature(), climate_sensor.getHumidity());
-    }
+    // 3. Poll indoor climate sensor asynchronously
+    update_dht_sensor();
 
-    // Periodic weather updates
+    // 4. Process background network tasks (periodic weather refresh)
     net_service.process();
 
-    delay(1);
+    // 5. Render smooth 60 FPS UI animations (automatically skipped when sleeping)
+    ui.tickAnimation();
 }

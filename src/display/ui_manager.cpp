@@ -4,16 +4,25 @@
 #include "screens/scr_clock.h"
 #include "screens/scr_network.h"
 #include "screens/scr_palette.h"
+#include "display_colors.h"
 
 UIManager ui;
 
 void UIManager::init() {
+    _is_sleeping = false;
+    lcd.init();
+    lcd.setRotation(0);
+    lcd.setBrightness(255);
+    lcd.fillScreen(TFT_BLACK);
+
     palette.init(lcd);
-    
+
     _spr.setColorDepth(8);
-    if (_spr.createSprite(lcd.width(), lcd.height()) == nullptr) {
-        Serial.println("Error: Failed to allocate 8-bit full-screen sprite buffer!");
+    if (!_spr.createSprite(SCREEN_WIDTH, SCREEN_HEIGHT)) {
+        Serial.println("ERR: Failed to allocate 8-bit sprite!");
     }
+
+    renderCurrentScreen();
 }
 
 void UIManager::renderCurrentScreen() {
@@ -77,7 +86,22 @@ void UIManager::setOutdoorData(float temp, float hum, float wind_ms, const char*
     }
 }
 
+void UIManager::setPowerSave(bool sleep) {
+    _is_sleeping = sleep;
+
+    if (_is_sleeping) {
+        lcd.setBrightness(0);
+        lcd.fillScreen(TFT_BLACK);
+    } else {
+        setCpuFrequencyMhz(240);
+        lcd.wakeup();
+        lcd.setBrightness(255);
+        renderCurrentScreen();
+    }
+}
+
 void UIManager::tickAnimation() {
+    if (_is_sleeping) return;
     // Limit frame rate to ~60 FPS (every 16 ms)
     if (millis() - _last_anim_time < 16) return;
     _last_anim_time = millis();
