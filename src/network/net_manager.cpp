@@ -356,7 +356,6 @@ void NetManager::setupWebServer()
             delay(500);
             ESP.restart();
         
-// -----
 } });
     _server.begin();
     sys_log.log("Web Server started (Auth ON)", LOG_INFO);
