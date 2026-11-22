@@ -3,12 +3,16 @@
 #include "display/display_lgfx.h"
 #include "display/ui_manager.h"
 #include "network/net_manager.h"
+#include "network/lamp_client.h"
 #include "peripherals/sensor_dht.h"
 #include "peripherals/radar_ld2410.h"
 #include "system/sys_logger.h"
 
 // Global LovyanGFX display instance matching display_lgfx.h
 LGFX_GC9B72 lcd;
+
+// Global Ridy-10-Lite HTTP Link client instance
+LampClient lampClient;
 
 // Button debounce variables
 static bool last_btn_state = HIGH;
@@ -62,7 +66,7 @@ void setup() {
     init_dht_sensor();
     sys_log.log("DHT11 Sensor on GPIO4 OK", LOG_INFO);
 
-    // 4. Initialize Wi-Fi (6 slots), NTP, HTTP Weather, Web Server & Radar (GPIO 6, OFF by default)
+    // 4. Initialize Wi-Fi (6 slots), NTP, HTTP Weather, Web Server, mDNS, Lamp Link & Radar (GPIO 6)
     net_service.init();
 }
 
@@ -70,15 +74,19 @@ void loop() {
     // 1. Monitor HLK-LD2410 presence radar & manage Eco Power-Save mode
     radar.update();
 
-    // 2. Handle tactile navigation / wake button
+    // 2. Synchronize presence state & auto-off timer with Ridy-10-Lite lamp
+    lampClient.updatePresence(digitalRead(PIN_RADAR_OUT) == HIGH);
+
+    // 3. Handle tactile navigation / wake button
     handlePhysicalButton();
 
-    // 3. Poll indoor climate sensor asynchronously
+    // 4. Poll indoor climate sensor asynchronously
     update_dht_sensor();
 
-    // 4. Process background network tasks (periodic weather refresh)
+    // 5. Process background network tasks (periodic weather refresh & lamp status sync)
     net_service.process();
+    lampClient.pollStatus();
 
-    // 5. Render smooth 60 FPS UI animations (automatically skipped when sleeping)
+    // 6. Render smooth 60 FPS UI animations (automatically skipped when sleeping)
     ui.tickAnimation();
 }

@@ -20,6 +20,8 @@ private:
     float _outdoor_hum;
     float _outdoor_wind;
 
+    float _display_lamp_bri;
+
     String _weather_cond;
     String _location_name;
     unsigned long _last_anim_time;
@@ -27,10 +29,11 @@ private:
     void renderCurrentScreen();
 
 public:
-    UIManager() : _spr(&lcd), _current_screen(0), _total_screens(6), 
+    UIManager() : _spr(&lcd), _current_screen(0), _total_screens(7), 
                   _target_indoor_temp(23.0f), _display_indoor_temp(-20.0f), _indoor_hum(45.0f),
                   _target_outdoor_temp(18.0f), _display_outdoor_temp(-20.0f), _outdoor_hum(78.0f),
-                  _outdoor_wind(0.0f), _weather_cond("CLOUDY"), _location_name("KYIV"), _last_anim_time(0) {}
+                  _outdoor_wind(0.0f), _display_lamp_bri(0.0f),
+                  _weather_cond("CLOUDY"), _location_name("KYIV"), _last_anim_time(0) {}
 
     void init();
     void nextScreen();

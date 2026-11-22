@@ -33,5 +33,8 @@
 #define PIN_RADAR_OUT 6
 #define LEDC_BASE_FREQ 5000  // LED PWM frequency (5 kHz)
 #define LEDC_TIMER_RES 8     // 8-bit resolution (0 - 255)
-
+// Lamp Link defaults (used if not overridden in NVS / Web Admin)
+#define DEFAULT_LAMP_URL      "http://ridy-lamp.local"
+#define DEFAULT_LAMP_KEY      "ridy-desk-2026"
+#define DEFAULT_LAMP_DELAY    60
 #endif // CONFIG_H

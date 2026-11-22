@@ -4,7 +4,9 @@
 #include "screens/scr_clock.h"
 #include "screens/scr_network.h"
 #include "screens/scr_palette.h"
+#include "screens/scr_lamp.h"
 #include "display_colors.h"
+#include "../network/lamp_client.h"
 
 UIManager ui;
 
@@ -48,6 +50,9 @@ void UIManager::renderCurrentScreen() {
         case 5:
             draw_screen_palette_design(_spr);
             break;
+        case 6:
+            draw_screen_lamp(_spr, _display_lamp_bri);
+            break;
     }
     _spr.pushSprite(0, 0);
 }
@@ -58,6 +63,8 @@ void UIManager::nextScreen() {
     if (_current_screen == 0) {
         _display_indoor_temp = -20.0f;
         _display_outdoor_temp = -20.0f;
+    } else if (_current_screen == 6) {
+        _display_lamp_bri = 0.0f;
     }
     renderCurrentScreen();
 }
@@ -141,6 +148,31 @@ void UIManager::tickAnimation() {
         static unsigned long last_net_draw = 0;
         if (millis() - last_net_draw > 1000) {
             last_net_draw = millis();
+            renderCurrentScreen();
+        }
+    }
+    // Screen 6 (Ridy-10-Lite Lamp Link): 60 FPS brightness arc ease + 500 ms countdown refresh
+    else if (_current_screen == 6) {
+        static unsigned long last_lamp_draw = 0;
+        bool need_redraw = false;
+
+        float target_bri = (lampClient.online && lampClient.isOn) ? (float)lampClient.brightness : 0.0f;
+        float diff_bri = target_bri - _display_lamp_bri;
+
+        if (abs(diff_bri) > 0.2f) {
+            _display_lamp_bri += diff_bri * 0.15f;
+            need_redraw = true;
+        } else if (_display_lamp_bri != target_bri) {
+            _display_lamp_bri = target_bri;
+            need_redraw = true;
+        }
+
+        if (millis() - last_lamp_draw >= 500) {
+            last_lamp_draw = millis();
+            need_redraw = true;
+        }
+
+        if (need_redraw) {
             renderCurrentScreen();
         }
     }
