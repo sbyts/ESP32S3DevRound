@@ -19,23 +19,23 @@
 // --- DISPLAY BACKLIGHT PWM ---
 #define LCD_BL_FREQ   12000  // 12 kHz anti-flicker frequency
 #define LCD_BL_CHAN   1      // PWM channel
+#define LCD_BL_MIN    35     // Minimum display brightness in darkness (0..255)
+#define LCD_BL_MAX    255    // Maximum display brightness in daylight (0..255)
 
-// --- DHT11 SENSOR SETTINGS ---
-#define DHTPIN        4
-#define DHTTYPE       DHT11    
+// --- I2C BUS (SHT31 + BH1750) ---
+#define I2C_SDA_PIN   15     // Freed from unused RGB LED
+#define I2C_SCL_PIN   16     // Freed from unused RGB LED
+#define I2C_FREQ_HZ   400000 // 400 kHz Fast-Mode I2C
 
-// --- BUTTON & RGB LED PINS ---
-#define BUTTON_PIN    18     // Pushbutton (connected to GND)
+// --- BUTTON & PRESENCE RADAR ---
+#define BUTTON_PIN    18     // Pushbutton (connected to GND, INPUT_PULLUP)
+#define PIN_RADAR_OUT 6      // HLK-LD2410 digital presence output
 
-#define LED_R_PIN     17     // Red channel pin
-#define LED_G_PIN     16     // Green channel pin
-#define LED_B_PIN     15     // Blue channel pin
-#define PIN_RADAR_OUT 6
-#define LEDC_BASE_FREQ 5000  // LED PWM frequency (5 kHz)
-#define LEDC_TIMER_RES 8     // 8-bit resolution (0 - 255)
-// Lamp Link defaults (used if not overridden in NVS / Web Admin)
+// --- SMART AUTOMATION & LAMP LINK DEFAULTS ---
 #define DEFAULT_LAMP_URL      "http://ridy-lamp.local"
 #define DEFAULT_LAMP_KEY      "ridy-desk-2026"
 #define DEFAULT_LAMP_DELAY    10   // Lamp auto-off delay in seconds
 #define DEFAULT_SCREEN_DELAY  15   // Station display sleep delay in seconds
+#define DEFAULT_LUX_THRESHOLD 40   // Ambient light threshold (lux) for lamp trigger
+
 #endif // CONFIG_H

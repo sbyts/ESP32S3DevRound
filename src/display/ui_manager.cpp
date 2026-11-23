@@ -7,14 +7,63 @@
 #include "screens/scr_lamp.h"
 #include "display_colors.h"
 #include "../network/lamp_client.h"
+#include "../peripherals/sensor_climate.h"
 
 UIManager ui;
+
+uint8_t UIManager::computeTargetBacklight() const {
+    if (!climateSensor.isBhReady()) {
+        return LCD_BL_MAX;
+    }
+
+    float lux = climateSensor.getLux();
+    if (lux <= 5.0f) {
+        return LCD_BL_MIN;
+    } else if (lux <= 50.0f) {
+        // Dim room / evening: smooth ramp from LCD_BL_MIN (35) to 110
+        float ratio = (lux - 5.0f) / 45.0f;
+        return (uint8_t)(LCD_BL_MIN + ratio * (110.0f - LCD_BL_MIN));
+    } else if (lux <= 300.0f) {
+        // Normal indoor lighting: smooth ramp from 110 to 215
+        float ratio = (lux - 50.0f) / 250.0f;
+        return (uint8_t)(110.0f + ratio * (215.0f - 110.0f));
+    } else if (lux <= 600.0f) {
+        // Bright daylight: ramp from 215 to LCD_BL_MAX (255)
+        float ratio = (lux - 300.0f) / 300.0f;
+        return (uint8_t)(215.0f + ratio * (LCD_BL_MAX - 215.0f));
+    }
+    return LCD_BL_MAX;
+}
+
+void UIManager::updateAutoBrightness(bool instant) {
+    if (_is_sleeping) return;
+
+    float target = (float)computeTargetBacklight();
+    if (instant) {
+        _current_backlight = target;
+    } else {
+        float diff = target - _current_backlight;
+        if (abs(diff) > 0.5f) {
+            _current_backlight += diff * 0.06f;
+        } else {
+            _current_backlight = target;
+        }
+    }
+
+    uint8_t new_bl = (uint8_t)roundf(_current_backlight);
+    if (new_bl != _last_applied_bl) {
+        _last_applied_bl = new_bl;
+        lcd.setBrightness(new_bl);
+    }
+}
 
 void UIManager::init() {
     _is_sleeping = false;
     lcd.init();
     lcd.setRotation(0);
-    lcd.setBrightness(255);
+    lcd.setBrightness(LCD_BL_MAX);
+    _last_applied_bl = LCD_BL_MAX;
+    _current_backlight = (float)LCD_BL_MAX;
     lcd.fillScreen(TFT_BLACK);
 
     palette.init(lcd);
@@ -119,11 +168,14 @@ void UIManager::setPowerSave(bool sleep) {
 
     if (_is_sleeping) {
         lcd.setBrightness(0);
+        _last_applied_bl = 0;
         lcd.fillScreen(TFT_BLACK);
     } else {
         setCpuFrequencyMhz(240);
         lcd.wakeup();
-        lcd.setBrightness(255);
+        // Wake directly to the ambient-matched brightness level (no blinding flash at night)
+        _last_applied_bl = 0;
+        updateAutoBrightness(true);
         renderCurrentScreen();
     }
 }
@@ -133,6 +185,9 @@ void UIManager::tickAnimation() {
     // Limit frame rate to ~60 FPS (every 16 ms)
     if (millis() - _last_anim_time < 16) return;
     _last_anim_time = millis();
+
+    // Smoothly adapt display backlight to ambient room lux
+    updateAutoBrightness(false);
 
     // Screen 0: Smooth interpolation for both Indoor (Outer) and Outdoor (Inner) temperature arcs
     if (_current_screen == 0) {

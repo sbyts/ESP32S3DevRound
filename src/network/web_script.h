@@ -26,10 +26,12 @@ const char WEB_JS[] PROGMEM = R"rawliteral(
             document.getElementById('ip_badge').innerText = d.ip || 'ONLINE';
             document.getElementById('m_uptime').innerText = d.uptime || '--';
             document.getElementById('m_cpu').innerText = d.temp + ' C / ' + d.cpu + ' MHz';
+            document.getElementById('m_env').innerText = d.room_t + 'C / ' + d.room_h + '% | ' + d.lux + ' lx';
             document.getElementById('m_free_ram').innerText = d.free_kb + ' KB';
             document.getElementById('m_used_ram').innerText = d.used_kb + ' / ' + d.total_kb + ' KB';
             document.getElementById('m_min_ram').innerText = d.min_kb + ' KB';
             document.getElementById('m_net').innerText = d.rssi + ' dBm | #' + d.boots;
+            document.getElementById('m_i2c').innerText = (d.sht_ok ? 'SHT31 OK' : 'SHT ERR') + ' | ' + (d.bh_ok ? 'BH1750 OK' : 'BH ERR');
 
             var box = document.getElementById('log_box');
             box.innerHTML = '';
@@ -103,6 +105,7 @@ const char WEB_JS[] PROGMEM = R"rawliteral(
           document.getElementById('cfg_radar_en').checked = (d.radar_en === true);
           document.getElementById('cfg_eco_wifi').checked = (d.eco_wifi === true);
           document.getElementById('cfg_screen_delay').value = d.screen_delay;
+          document.getElementById('cfg_lux_thresh').value = d.lux_thresh;
           document.getElementById('cfg_lamp_delay').value = d.lamp_delay;
           document.getElementById('cfg_lamp_auto').checked = (d.lamp_auto === true);
           document.getElementById('cfg_lamp_url').value = d.lamp_url || '';
@@ -122,6 +125,7 @@ const char WEB_JS[] PROGMEM = R"rawliteral(
       radar_en: document.getElementById('cfg_radar_en').checked,
       eco_wifi: document.getElementById('cfg_eco_wifi').checked,
       screen_delay: parseInt(document.getElementById('cfg_screen_delay').value),
+      lux_thresh: parseInt(document.getElementById('cfg_lux_thresh').value),
       lamp_delay: parseInt(document.getElementById('cfg_lamp_delay').value),
       lamp_auto: document.getElementById('cfg_lamp_auto').checked,
       lamp_url: document.getElementById('cfg_lamp_url').value.trim(),

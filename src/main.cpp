@@ -4,14 +4,14 @@
 #include "display/ui_manager.h"
 #include "network/net_manager.h"
 #include "network/lamp_client.h"
-#include "peripherals/sensor_dht.h"
+#include "peripherals/sensor_climate.h"
 #include "peripherals/radar_ld2410.h"
 #include "system/sys_logger.h"
 
 // Global LovyanGFX display instance matching display_lgfx.h
 LGFX_GC9B72 lcd;
 
-// Global Ridy-10-Lite HTTP Link client instance
+// Global Ridy-10-Lite Link client instance
 LampClient lampClient;
 
 // Button debounce variables
@@ -61,9 +61,8 @@ void setup() {
     ui.init();
     sys_log.log("Display GC9B72 (8-bit) OK", LOG_INFO);
 
-    // 3. Initialize indoor DHT11 sensor (GPIO 4)
-    init_dht_sensor();
-    sys_log.log("DHT11 Sensor on GPIO4 OK", LOG_INFO);
+    // 3. Initialize I2C climate & ambient light sensors (SHT31 + BH1750 on GPIO 15/16)
+    climateSensor.init();
 
     // 4. Initialize Wi-Fi, NTP, HTTP Weather, Web Server, mDNS & spawn Core 0 NetWorkerTask
     net_service.init();
@@ -81,8 +80,8 @@ void loop() {
     // 3. Handle tactile navigation / wake button
     handlePhysicalButton();
 
-    // 4. Poll indoor climate sensor asynchronously
-    update_dht_sensor();
+    // 4. Non-blocking two-phase I2C poll (SHT31 + BH1750)
+    climateSensor.update();
 
     // 5. Render smooth 60 FPS UI animations (automatically skipped when sleeping)
     ui.tickAnimation();

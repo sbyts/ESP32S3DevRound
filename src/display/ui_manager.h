@@ -6,6 +6,7 @@
 #include <freertos/portmacro.h>
 #include "display/display_lgfx.h"
 #include "display/display_colors.h"
+#include "../config/config.h"
 
 class UIManager {
 private:
@@ -27,12 +28,16 @@ private:
     bool _outdoor_dirty;
 
     float _display_lamp_bri;
+    float _current_backlight;
+    uint8_t _last_applied_bl;
 
     char _weather_cond[24];
     char _location_name[32];
     unsigned long _last_anim_time;
 
     void renderCurrentScreen();
+    uint8_t computeTargetBacklight() const;
+    void updateAutoBrightness(bool instant = false);
 
 public:
     UIManager() : _spr(&lcd), _current_screen(0), _total_screens(7),
@@ -41,6 +46,7 @@ public:
                   _is_sleeping(false),
                   _target_outdoor_temp(18.0f), _display_outdoor_temp(-20.0f), _outdoor_hum(78.0f),
                   _outdoor_wind(0.0f), _outdoor_dirty(false), _display_lamp_bri(0.0f),
+                  _current_backlight((float)LCD_BL_MAX), _last_applied_bl(LCD_BL_MAX),
                   _last_anim_time(0) {
         strlcpy(_weather_cond, "CLOUDY", sizeof(_weather_cond));
         strlcpy(_location_name, "KYIV", sizeof(_location_name));
@@ -55,6 +61,7 @@ public:
     
     void tickAnimation();
     uint8_t getCurrentScreen() const { return _current_screen; }
+    uint8_t getCurrentBrightness() const { return _last_applied_bl; }
 };
 
 extern UIManager ui;

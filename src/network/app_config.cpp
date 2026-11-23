@@ -16,11 +16,12 @@ void AppConfig::load()
     radarEnabled = _prefs.getBool("radar_en", false);
     ecoWifiOff = _prefs.getBool("eco_wifi", false);
 
-    // Load Ridy-10-Lite Lamp Link settings with config.h defaults
+    // Load Ridy-10-Lite Lamp Link & Lux settings with config.h defaults
     lampUrl = _prefs.getString("lamp_url", DEFAULT_LAMP_URL);
     lampKey = _prefs.getString("lamp_key", DEFAULT_LAMP_KEY);
     lampDelaySec = _prefs.getUInt("lamp_delay", DEFAULT_LAMP_DELAY);
     lampAutoPresence = _prefs.getBool("lamp_auto", true);
+    luxThreshold = _prefs.getUInt("lux_thresh", DEFAULT_LUX_THRESHOLD);
 
     netCount = 0;
     for (uint8_t i = 0; i < MAX_WIFI_NETWORKS; i++)
@@ -121,4 +122,10 @@ void AppConfig::setScreenDelay(uint32_t delaySec)
 {
     screenDelaySec = delaySec;
     _prefs.putUInt("scr_delay", screenDelaySec);
+}
+
+void AppConfig::setLuxThreshold(uint32_t lux)
+{
+    luxThreshold = lux;
+    _prefs.putUInt("lux_thresh", luxThreshold);
 }

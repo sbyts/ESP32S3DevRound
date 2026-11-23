@@ -6,7 +6,9 @@
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include "../config/config.h"
+#include "app_config.h"
 #include "../peripherals/radar_ld2410.h"
+#include "../peripherals/sensor_climate.h"
 #include "../system/sys_logger.h"
 
 class LampClient {
@@ -59,8 +61,11 @@ public:
             awayElapsedSec = 0;
             _sentAwayCmdForCurrentCycle = false;
 
-            // Turn ON immediately if lamp is OFF
-            if (!isOn && _pendingCmd != 1 && (now - _lastCmdAttemptMs > 1500UL)) {
+            // Daylight-aware check: only turn ON if room is darker than threshold (or if BH1750 is absent)
+            bool is_dark_enough = !climateSensor.isBhReady() ||
+                                  (climateSensor.getLux() <= (float)appConfig.luxThreshold);
+
+            if (!isOn && is_dark_enough && _pendingCmd != 1 && (now - _lastCmdAttemptMs > 1500UL)) {
                 _lastCmdAttemptMs = now;
                 _pendingCmd = 1;
             }

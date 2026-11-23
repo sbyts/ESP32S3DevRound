@@ -2,6 +2,7 @@
 #include "../display_colors.h"
 #include "../../network/lamp_client.h"
 #include "../../peripherals/radar_ld2410.h"
+#include "../../peripherals/sensor_climate.h"
 #include <math.h>
 
 static uint16_t get_lamp_mode_color(uint8_t mode)
@@ -169,10 +170,27 @@ void draw_screen_lamp(LGFX_Sprite &spr, float disp_bri)
     }
     spr.drawCenterString(radar_row.c_str(), cx, 206);
 
-    // 8. Secondary Info Row: Delay Setting & Host
+// 8. Secondary Info Row: Centered vertical divider "36 sec | 36 lux"
+    spr.setFont(&fonts::FreeSansBold9pt7b);
     spr.setTextColor(grey_col, TFT_BLACK);
-    String delay_info = "DELAY: " + String(lampClient.offDelaySec) + "s";
-    spr.drawCenterString(delay_info.c_str(), cx, 245);
+
+    char delay_buf[16];
+    snprintf(delay_buf, sizeof(delay_buf), "%lu sec", (unsigned long)lampClient.offDelaySec);
+
+    char lux_buf[16];
+    if (climateSensor.isBhReady())
+    {
+        snprintf(lux_buf, sizeof(lux_buf), "%d lux", (int)roundf(climateSensor.getLux()));
+    }
+    else
+    {
+        strlcpy(lux_buf, "-- lux", sizeof(lux_buf));
+    }
+
+    const int32_t row_y = 245;
+    spr.drawRightString(delay_buf, cx - 8, row_y);
+    spr.drawCenterString("|", cx, row_y);
+    spr.drawString(lux_buf, cx + 8, row_y);
 
     spr.setFont(&fonts::Font0);
     spr.setTextColor(grey_col, TFT_BLACK);

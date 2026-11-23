@@ -34,10 +34,12 @@ const char WEB_HTML_BODY[] PROGMEM = R"rawliteral(
     <div class="grid">
       <div class="metric"><div class="metric-label">Uptime</div><div class="metric-val" id="m_uptime">--</div></div>
       <div class="metric"><div class="metric-label">Chip Temp / CPU</div><div class="metric-val accent" id="m_cpu">--</div></div>
+      <div class="metric"><div class="metric-label">Room Climate / Light</div><div class="metric-val" id="m_env">--</div></div>
       <div class="metric"><div class="metric-label">Free Heap RAM</div><div class="metric-val" id="m_free_ram">--</div></div>
       <div class="metric"><div class="metric-label">Used / Total RAM</div><div class="metric-val" id="m_used_ram">--</div></div>
       <div class="metric"><div class="metric-label">Min Free Heap</div><div class="metric-val" id="m_min_ram">--</div></div>
       <div class="metric"><div class="metric-label">Wi-Fi Signal / Boots</div><div class="metric-val" id="m_net">--</div></div>
+      <div class="metric"><div class="metric-label">I2C Sensors (SHT / BH)</div><div class="metric-val" id="m_i2c">--</div></div>
     </div>
 
     <div class="section-title">Ring Buffer Logs (Last 10 Events)</div>
@@ -81,7 +83,7 @@ const char WEB_HTML_BODY[] PROGMEM = R"rawliteral(
       <input type="number" id="cfg_screen_delay" min="5" max="3600" placeholder="15">
     </div>
 
-    <div class="section-title">Ridy-10-Lite Lamp Link</div>
+    <div class="section-title">Ridy-10-Lite Lamp Link &amp; Lux Trigger</div>
     <div class="switch-row">
       <div>
         <div class="switch-title">Auto Presence Lamp Control</div>
@@ -91,6 +93,10 @@ const char WEB_HTML_BODY[] PROGMEM = R"rawliteral(
         <input type="checkbox" id="cfg_lamp_auto">
         <span class="pill-slider"></span>
       </label>
+    </div>
+    <div class="group">
+      <label class="field-lbl">Ambient Light Threshold for Lamp Trigger (lux)</label>
+      <input type="number" id="cfg_lux_thresh" min="0" max="10000" placeholder="40">
     </div>
     <div class="group">
       <label class="field-lbl">Lamp Auto-Off Delay (sec)</label>

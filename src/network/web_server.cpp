@@ -1,6 +1,7 @@
 #include "web_server.h"
 #include "app_config.h"
 #include "web_ui.h"
+#include "../peripherals/sensor_climate.h"
 #include "../system/sys_logger.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
@@ -65,6 +66,11 @@ void WebAdminServer::begin()
         res->printf("\"temp\":\"%.1f\",", temperatureRead());
         res->printf("\"rssi\":%d,", (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0);
         res->printf("\"boots\":%u,", appConfig.bootCount);
+        res->printf("\"room_t\":\"%.1f\",", climateSensor.getTemperature());
+        res->printf("\"room_h\":%.0f,", climateSensor.getHumidity());
+        res->printf("\"lux\":%.0f,", climateSensor.getLux());
+        res->printf("\"sht_ok\":%s,", climateSensor.isShtReady() ? "true" : "false");
+        res->printf("\"bh_ok\":%s,", climateSensor.isBhReady() ? "true" : "false");
         res->print("\"logs\":[");
 
         uint8_t cnt = sys_log.getCount();
@@ -102,6 +108,7 @@ void WebAdminServer::begin()
         res->printf("\"lamp_key\":\"%s\",", clean_lamp_key.c_str());
         res->printf("\"lamp_delay\":%u,", appConfig.lampDelaySec);
         res->printf("\"lamp_auto\":%s,", appConfig.lampAutoPresence ? "true" : "false");
+        res->printf("\"lux_thresh\":%u,", appConfig.luxThreshold);
         res->print("\"networks\":[");
 
         for (uint8_t i = 0; i < appConfig.netCount; i++)
@@ -174,6 +181,11 @@ void WebAdminServer::begin()
             if (!doc["lamp_auto"].isNull())
             {
                 appConfig.setLampAuto(doc["lamp_auto"] | true);
+            }
+
+            if (!doc["lux_thresh"].isNull())
+            {
+                appConfig.setLuxThreshold(doc["lux_thresh"] | DEFAULT_LUX_THRESHOLD);
             }
 
             if (doc["networks"].is<JsonArray>())

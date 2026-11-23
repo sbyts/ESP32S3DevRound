@@ -23,11 +23,12 @@ public:
     bool radarEnabled = false;
     bool ecoWifiOff = false;
 
-    // Ridy-10-Lite Lamp Link settings
+    // Ridy-10-Lite Lamp Link & Lux automation settings
     String lampUrl = DEFAULT_LAMP_URL;
     String lampKey = DEFAULT_LAMP_KEY;
     uint32_t lampDelaySec = DEFAULT_LAMP_DELAY;
     bool lampAutoPresence = true;
+    uint32_t luxThreshold = DEFAULT_LUX_THRESHOLD;
 
     // Multi-AP Wi-Fi credentials
     WifiCreds networks[MAX_WIFI_NETWORKS];
@@ -46,6 +47,7 @@ public:
     void setLampDelay(uint32_t delaySec);
     void setLampAuto(bool autoEn);
     void setScreenDelay(uint32_t delaySec);
+    void setLuxThreshold(uint32_t lux);
 
 private:
     Preferences _prefs;
