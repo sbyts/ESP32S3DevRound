@@ -37,7 +37,6 @@ void handlePhysicalButton() {
 
                 // Always force wake-up on button press so the screen never stays dark
                 radar.manualWake();
-                sys_log.log("Button press -> Screen ON", LOG_INFO);
 
                 // Switch to the next screen only if the display was already awake
                 if (!was_sleeping) {
@@ -66,11 +65,13 @@ void setup() {
     init_dht_sensor();
     sys_log.log("DHT11 Sensor on GPIO4 OK", LOG_INFO);
 
-    // 4. Initialize Wi-Fi (6 slots), NTP, HTTP Weather, Web Server, mDNS, Lamp Link & Radar (GPIO 6)
+    // 4. Initialize Wi-Fi, NTP, HTTP Weather, Web Server, mDNS & spawn Core 0 NetWorkerTask
     net_service.init();
 }
 
 void loop() {
+    // Core 1 Dedicated Loop: Zero blocking network calls!
+
     // 1. Monitor HLK-LD2410 presence radar & manage Eco Power-Save mode
     radar.update();
 
@@ -83,10 +84,6 @@ void loop() {
     // 4. Poll indoor climate sensor asynchronously
     update_dht_sensor();
 
-    // 5. Process background network tasks (periodic weather refresh & lamp status sync)
-    net_service.process();
-    lampClient.pollStatus();
-
-    // 6. Render smooth 60 FPS UI animations (automatically skipped when sleeping)
+    // 5. Render smooth 60 FPS UI animations (automatically skipped when sleeping)
     ui.tickAnimation();
 }

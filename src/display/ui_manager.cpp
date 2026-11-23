@@ -28,13 +28,30 @@ void UIManager::init() {
 }
 
 void UIManager::renderCurrentScreen() {
+    // Must ONLY be called from Core 1 (main loop)
     switch (_current_screen) {
-        case 0:
-            draw_screen_weather(_spr, _target_indoor_temp, _display_indoor_temp, 
-                                _target_outdoor_temp, _display_outdoor_temp, 
-                                _indoor_hum, _outdoor_hum, _outdoor_wind, 
-                                _weather_cond, _location_name);
+        case 0: {
+            float t_in_target, t_out_target, h_in, h_out, w_out;
+            char cond_buf[24];
+            char loc_buf[32];
+
+            portENTER_CRITICAL(&_mux);
+            t_in_target  = _target_indoor_temp;
+            t_out_target = _target_outdoor_temp;
+            h_in         = _indoor_hum;
+            h_out        = _outdoor_hum;
+            w_out        = _outdoor_wind;
+            strlcpy(cond_buf, _weather_cond, sizeof(cond_buf));
+            strlcpy(loc_buf, _location_name, sizeof(loc_buf));
+            _outdoor_dirty = false;
+            portEXIT_CRITICAL(&_mux);
+
+            draw_screen_weather(_spr, t_in_target, _display_indoor_temp, 
+                                t_out_target, _display_outdoor_temp, 
+                                h_in, h_out, w_out, 
+                                String(cond_buf), String(loc_buf));
             break;
+        }
         case 1:
             draw_screen_analog_clock(_spr);
             break;
@@ -70,8 +87,10 @@ void UIManager::nextScreen() {
 }
 
 void UIManager::setIndoorData(float temp, float hum, bool force_redraw) {
+    portENTER_CRITICAL(&_mux);
     if (!isnan(temp)) _target_indoor_temp = temp;
     if (!isnan(hum))  _indoor_hum = hum;
+    portEXIT_CRITICAL(&_mux);
 
     if (force_redraw && _current_screen == 0) {
         renderCurrentScreen();
@@ -79,18 +98,20 @@ void UIManager::setIndoorData(float temp, float hum, bool force_redraw) {
 }
 
 void UIManager::setOutdoorData(float temp, float hum, float wind_ms, const char* condition, const char* location) {
+    // Thread-safe: safe to call from Core 0 network task.
+    // Does NOT trigger SPI flush directly; Core 1 picks up changes via _outdoor_dirty.
+    portENTER_CRITICAL(&_mux);
     _target_outdoor_temp = temp;
     _outdoor_hum = hum;
     _outdoor_wind = wind_ms;
-    if (condition != nullptr && strlen(condition) > 0) {
-        _weather_cond = String(condition);
+    if (condition != nullptr && condition[0] != '\0') {
+        strlcpy(_weather_cond, condition, sizeof(_weather_cond));
     }
     if (location != nullptr) {
-        _location_name = String(location);
+        strlcpy(_location_name, location, sizeof(_location_name));
     }
-    if (_current_screen == 0) {
-        renderCurrentScreen();
-    }
+    _outdoor_dirty = true;
+    portEXIT_CRITICAL(&_mux);
 }
 
 void UIManager::setPowerSave(bool sleep) {
@@ -115,23 +136,27 @@ void UIManager::tickAnimation() {
 
     // Screen 0: Smooth interpolation for both Indoor (Outer) and Outdoor (Inner) temperature arcs
     if (_current_screen == 0) {
-        bool need_redraw = false;
+        portENTER_CRITICAL(&_mux);
+        float t_in_target  = _target_indoor_temp;
+        float t_out_target = _target_outdoor_temp;
+        bool need_redraw   = _outdoor_dirty;
+        portEXIT_CRITICAL(&_mux);
 
-        float diff_in = _target_indoor_temp - _display_indoor_temp;
+        float diff_in = t_in_target - _display_indoor_temp;
         if (abs(diff_in) > 0.05f) {
             _display_indoor_temp += diff_in * 0.12f;
             need_redraw = true;
-        } else if (_display_indoor_temp != _target_indoor_temp) {
-            _display_indoor_temp = _target_indoor_temp;
+        } else if (_display_indoor_temp != t_in_target) {
+            _display_indoor_temp = t_in_target;
             need_redraw = true;
         }
 
-        float diff_out = _target_outdoor_temp - _display_outdoor_temp;
+        float diff_out = t_out_target - _display_outdoor_temp;
         if (abs(diff_out) > 0.05f) {
             _display_outdoor_temp += diff_out * 0.12f;
             need_redraw = true;
-        } else if (_display_outdoor_temp != _target_outdoor_temp) {
-            _display_outdoor_temp = _target_outdoor_temp;
+        } else if (_display_outdoor_temp != t_out_target) {
+            _display_outdoor_temp = t_out_target;
             need_redraw = true;
         }
 

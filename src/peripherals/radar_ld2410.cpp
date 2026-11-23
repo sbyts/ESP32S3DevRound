@@ -10,14 +10,19 @@ void RadarSensor::init(bool enabled, bool deep_wifi_off, uint32_t screenDelaySec
     pinMode(_pin, INPUT_PULLDOWN);
     _enabled = enabled;
     _deep_wifi_off = deep_wifi_off;
+    uint32_t safe_sec = (screenDelaySec < 1) ? 1 : screenDelaySec;
+    _grace_period_ms = safe_sec * 1000UL;
     _is_eco_active = false;
     _last_presence_ms = millis();
-    sys_log.log(String("Radar GPIO6: ") + (_enabled ? "ENABLED" : "DISABLED"), LOG_INFO);
+    sys_log.log(String("Radar GPIO6: ") + (_enabled ? "ENABLED" : "DISABLED") +
+                " (" + String(safe_sec) + "s)", LOG_INFO);
 }
 
 void RadarSensor::setConfig(bool enabled, bool deep_wifi_off, uint32_t screenDelaySec) {
     _enabled = enabled;
     _deep_wifi_off = deep_wifi_off;
+    uint32_t safe_sec = (screenDelaySec < 1) ? 1 : screenDelaySec;
+    _grace_period_ms = safe_sec * 1000UL;
     if (!_enabled) {
         manualWake();
     }

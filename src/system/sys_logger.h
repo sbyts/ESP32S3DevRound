@@ -2,6 +2,8 @@
 #define SYS_LOGGER_H
 
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/portmacro.h>
 
 enum LogLevel {
     LOG_INFO = 0, // Grey on display
@@ -21,14 +23,15 @@ public:
 private:
     LogEntry _buffer[MAX_LOGS];
     uint8_t _count;
+    mutable portMUX_TYPE _mux;
 
     String getTimestamp();
 
 public:
-    SysLogger() : _count(0) {}
+    SysLogger() : _count(0), _mux(portMUX_INITIALIZER_UNLOCKED) {}
 
     void log(const String &msg, LogLevel level = LOG_INFO);
-    uint8_t getCount() const { return _count; }
+    uint8_t getCount() const;
     LogEntry getEntry(uint8_t index) const;
 };
 

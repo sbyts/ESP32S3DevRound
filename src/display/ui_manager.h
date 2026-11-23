@@ -2,6 +2,8 @@
 #define UI_MANAGER_H
 
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/portmacro.h>
 #include "display/display_lgfx.h"
 #include "display/display_colors.h"
 
@@ -11,29 +13,38 @@ private:
     uint8_t _current_screen;
     const uint8_t _total_screens;
 
+    mutable portMUX_TYPE _mux;
+
     float _target_indoor_temp;
     float _display_indoor_temp;
     float _indoor_hum;
-    bool _is_sleeping;
+    volatile bool _is_sleeping;
+
     float _target_outdoor_temp;
     float _display_outdoor_temp;
     float _outdoor_hum;
     float _outdoor_wind;
+    bool _outdoor_dirty;
 
     float _display_lamp_bri;
 
-    String _weather_cond;
-    String _location_name;
+    char _weather_cond[24];
+    char _location_name[32];
     unsigned long _last_anim_time;
 
     void renderCurrentScreen();
 
 public:
-    UIManager() : _spr(&lcd), _current_screen(0), _total_screens(7), 
+    UIManager() : _spr(&lcd), _current_screen(0), _total_screens(7),
+                  _mux(portMUX_INITIALIZER_UNLOCKED),
                   _target_indoor_temp(23.0f), _display_indoor_temp(-20.0f), _indoor_hum(45.0f),
+                  _is_sleeping(false),
                   _target_outdoor_temp(18.0f), _display_outdoor_temp(-20.0f), _outdoor_hum(78.0f),
-                  _outdoor_wind(0.0f), _display_lamp_bri(0.0f),
-                  _weather_cond("CLOUDY"), _location_name("KYIV"), _last_anim_time(0) {}
+                  _outdoor_wind(0.0f), _outdoor_dirty(false), _display_lamp_bri(0.0f),
+                  _last_anim_time(0) {
+        strlcpy(_weather_cond, "CLOUDY", sizeof(_weather_cond));
+        strlcpy(_location_name, "KYIV", sizeof(_location_name));
+    }
 
     void init();
     void nextScreen();

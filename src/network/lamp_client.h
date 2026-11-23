@@ -38,21 +38,9 @@ public:
         _key = linkKey;
         offDelaySec = delaySec;
         _cachedResolvedBase = "";
-
-        if (_taskHandle == nullptr) {
-            xTaskCreatePinnedToCore(
-                taskRunner,
-                "LampLinkTask",
-                6144,
-                this,
-                1,
-                &_taskHandle,
-                0 // Core 0 (Wi-Fi / Network core)
-            );
-        }
     }
 
-    // Non-blocking: evaluates presence & sends immediate delayed-OFF command when user leaves
+    // Called from Core 1 (loop): evaluates presence & queues immediate delayed-OFF command
     void updatePresence(bool rawPinHigh) {
         if (!autoPresence || !radar.isEnabled()) {
             userPresent = false;
@@ -103,33 +91,8 @@ public:
         }
     }
 
-    // Kept for compatibility with main.cpp (actual polling runs on Core 0)
-    void pollStatus() {}
-
-private:
-    String _baseUrl = DEFAULT_LAMP_URL;
-    String _key = DEFAULT_LAMP_KEY;
-    String _cachedResolvedBase = "";
-    unsigned long _lastMdnsResolveMs = 0;
-
-    bool _sentAwayCmdForCurrentCycle = false;
-    volatile int8_t _pendingCmd = -1; // -1: none, 0: send delayed OFF, 1: send immediate ON
-    unsigned long _lowDebounceStartMs = 0;
-    unsigned long _awayStartMs = 0;
-    unsigned long _lastCmdAttemptMs = 0;
-    unsigned long _lastPollMs = 0;
-    unsigned long _ignorePollUntilMs = 0;
-    TaskHandle_t _taskHandle = nullptr;
-
-    static void taskRunner(void* param) {
-        LampClient* self = static_cast<LampClient*>(param);
-        for (;;) {
-            self->processNetworkLoop();
-            vTaskDelay(pdMS_TO_TICKS(50));
-        }
-    }
-
-    void processNetworkLoop() {
+    // Called exclusively from Core 0 (NetWorkerTask)
+    void process() {
         if (WiFi.status() != WL_CONNECTED) {
             online = false;
             _cachedResolvedBase = "";
@@ -170,6 +133,23 @@ private:
             executeHttp("GET", resolveEndpointUrl(), false);
         }
     }
+
+    // Legacy alias
+    void pollStatus() { process(); }
+
+private:
+    String _baseUrl = DEFAULT_LAMP_URL;
+    String _key = DEFAULT_LAMP_KEY;
+    String _cachedResolvedBase = "";
+    unsigned long _lastMdnsResolveMs = 0;
+
+    volatile bool _sentAwayCmdForCurrentCycle = false;
+    volatile int8_t _pendingCmd = -1; // -1: none, 0: send delayed OFF, 1: send immediate ON
+    unsigned long _lowDebounceStartMs = 0;
+    unsigned long _awayStartMs = 0;
+    unsigned long _lastCmdAttemptMs = 0;
+    unsigned long _lastPollMs = 0;
+    unsigned long _ignorePollUntilMs = 0;
 
     String resolveEndpointUrl() {
         if (_cachedResolvedBase.length() > 0 && (online || (millis() - _lastMdnsResolveMs < 30000UL))) {
