@@ -6,8 +6,33 @@
 #include "../system/sys_logger.h"
 #include "esp_sntp.h"
 #include <ESPmDNS.h>
+#include <ArduinoOTA.h>
 
 NetManager net_service;
+
+void NetManager::setupOTA()
+{
+    if (_ota_initialized) return;
+
+    ArduinoOTA.setHostname("climate-station");
+    ArduinoOTA.setPassword(appConfig.adminPass.c_str());
+
+    ArduinoOTA.onStart([]() {
+        sys_log.log("OTA update started...", LOG_NET);
+    });
+
+    ArduinoOTA.onEnd([]() {
+        sys_log.log("OTA complete! Rebooting...", LOG_NET);
+    });
+
+    ArduinoOTA.onError([](ota_error_t error) {
+        sys_log.log("OTA Error [" + String(error) + "]", LOG_ERR);
+    });
+
+    ArduinoOTA.begin();
+    _ota_initialized = true;
+    sys_log.log("ArduinoOTA ready (climate-station.local)", LOG_INFO);
+}
 
 bool NetManager::connectToBestAvailableWiFi()
 {
@@ -69,7 +94,7 @@ void NetManager::init()
     appConfig.load();
 
     // 2. Initialize presence radar & Ridy-10-Lite HTTP Link client
-    radar.init(appConfig.radarEnabled, appConfig.ecoWifiOff);
+    radar.init(appConfig.radarEnabled, appConfig.ecoWifiOff, appConfig.screenDelaySec);
     lampClient.autoPresence = appConfig.lampAutoPresence;
     lampClient.begin(appConfig.lampUrl, appConfig.lampKey, appConfig.lampDelaySec);
 
@@ -85,8 +110,11 @@ void NetManager::init()
 
         if (MDNS.begin("climate-station"))
         {
-            sys_log.log("mDNS responder started", LOG_NET);
+            MDNS.addService("http", "tcp", 80);
+            sys_log.log("mDNS: climate-station.local", LOG_NET);
         }
+
+        setupOTA();
 
         sntp_set_sync_interval(300000);
         configTzTime("EET-2EEST,M3.5.0/3,M10.5.0/4", "pool.ntp.org", "time.nist.gov");
@@ -99,6 +127,7 @@ void NetManager::init()
         _is_connected = false;
         WiFi.mode(WIFI_AP);
         WiFi.softAP("ClimateStation-AP");
+        setupOTA(); // Дозволяє OTA навіть у режимі точки доступу (192.168.4.1)
         sys_log.log("AP Started: 192.168.4.1", LOG_ERR);
     }
 
@@ -132,7 +161,10 @@ void NetManager::setEcoMode(bool enable_eco, bool deep_wifi_off)
             if (connectToBestAvailableWiFi())
             {
                 _is_connected = true;
-                MDNS.begin("climate-station");
+                if (MDNS.begin("climate-station"))
+                {
+                    MDNS.addService("http", "tcp", 80);
+                }
                 sys_log.log("Wi-Fi restored: " + WiFi.localIP().toString(), LOG_NET);
             }
         }
@@ -145,5 +177,9 @@ void NetManager::setEcoMode(bool enable_eco, bool deep_wifi_off)
 
 void NetManager::process()
 {
+    if (!_wifi_suspended)
+    {
+        ArduinoOTA.handle();
+    }
     weatherClient.process(_wifi_suspended);
 }

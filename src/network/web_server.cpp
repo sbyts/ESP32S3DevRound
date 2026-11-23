@@ -97,6 +97,7 @@ void WebAdminServer::begin()
         res->printf("\"city\":\"%s\",", clean_city.c_str());
         res->printf("\"radar_en\":%s,", appConfig.radarEnabled ? "true" : "false");
         res->printf("\"eco_wifi\":%s,", appConfig.ecoWifiOff ? "true" : "false");
+        res->printf("\"screen_delay\":%u,", appConfig.screenDelaySec);
         res->printf("\"lamp_url\":\"%s\",", clean_lamp_url.c_str());
         res->printf("\"lamp_key\":\"%s\",", clean_lamp_key.c_str());
         res->printf("\"lamp_delay\":%u,", appConfig.lampDelaySec);
@@ -146,6 +147,11 @@ void WebAdminServer::begin()
             if (!doc["eco_wifi"].isNull())
             {
                 appConfig.setEcoWifiOff(doc["eco_wifi"] | false);
+            }
+
+            if (!doc["screen_delay"].isNull())
+            {
+                appConfig.setScreenDelay(doc["screen_delay"] | DEFAULT_SCREEN_DELAY);
             }
 
             const char* new_lamp_url = doc["lamp_url"] | "";

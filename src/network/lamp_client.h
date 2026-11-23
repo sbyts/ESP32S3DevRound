@@ -11,17 +11,17 @@
 
 class LampClient {
 public:
-    // Live lamp status
-    bool online = false;
-    bool isOn = false;
-    uint8_t mode = 1;           // 1: 3000K, 2: 6000K, 3: 4500K
-    int brightness = 80;        // 10..100%
+    // Live lamp status (read safely by UI on Core 1)
+    volatile bool online = false;
+    volatile bool isOn = false;
+    volatile uint8_t mode = 1;      // 1: 3000K, 2: 6000K, 3: 4500K
+    volatile int brightness = 80;   // 10..100%
 
     // Presence automation settings
-    bool autoPresence = true;
-    uint32_t offDelaySec = DEFAULT_LAMP_DELAY;  // Configurable delay before turning lamp off (seconds)
-    bool userPresent = false;
-    uint32_t awayElapsedSec = 0;
+    volatile bool autoPresence = true;
+    volatile uint32_t offDelaySec = DEFAULT_LAMP_DELAY; // Default 10s
+    volatile bool userPresent = false;
+    volatile uint32_t awayElapsedSec = 0;
 
     void begin(const String& baseUrl = DEFAULT_LAMP_URL,
                const String& linkKey = DEFAULT_LAMP_KEY,
@@ -31,20 +31,34 @@ public:
         if (_baseUrl.endsWith("/")) {
             _baseUrl.remove(_baseUrl.length() - 1);
         }
-        // Strip /api/link if user entered full endpoint path in Web UI
         if (_baseUrl.endsWith("/api/link")) {
             _baseUrl.remove(_baseUrl.length() - 9);
         }
 
         _key = linkKey;
         offDelaySec = delaySec;
+        _cachedResolvedBase = "";
+
+        if (_taskHandle == nullptr) {
+            xTaskCreatePinnedToCore(
+                taskRunner,
+                "LampLinkTask",
+                6144,
+                this,
+                1,
+                &_taskHandle,
+                0 // Core 0 (Wi-Fi / Network core)
+            );
+        }
     }
 
-    // Call in loop() with raw radar pin state (PIN_RADAR_OUT)
+    // Non-blocking: evaluates presence & sends immediate delayed-OFF command when user leaves
     void updatePresence(bool rawPinHigh) {
         if (!autoPresence || !radar.isEnabled()) {
             userPresent = false;
             awayElapsedSec = 0;
+            _awayStartMs = 0;
+            _sentAwayCmdForCurrentCycle = false;
             return;
         }
 
@@ -52,58 +66,116 @@ public:
 
         if (rawPinHigh) {
             userPresent = true;
+            _lowDebounceStartMs = 0;
             _awayStartMs = 0;
             awayElapsedSec = 0;
+            _sentAwayCmdForCurrentCycle = false;
 
-            if (!_sentPresentState) {
-                if (sendCommand(true)) {
-                    _sentPresentState = true;
-                    isOn = true;
-                    sys_log.log("Lamp Link -> Presence ON", LOG_INFO);
-                }
+            // Turn ON immediately if lamp is OFF
+            if (!isOn && _pendingCmd != 1 && (now - _lastCmdAttemptMs > 1500UL)) {
+                _lastCmdAttemptMs = now;
+                _pendingCmd = 1;
             }
         } else {
-            userPresent = false;
-            if (_sentPresentState) {
-                if (_awayStartMs == 0) {
-                    _awayStartMs = now;
-                }
-                awayElapsedSec = (now - _awayStartMs) / 1000;
+            // Short 400ms debounce so brief LD2410 micro-drops don't spam HTTP requests
+            if (_lowDebounceStartMs == 0) {
+                _lowDebounceStartMs = now;
+            }
+            if (now - _lowDebounceStartMs < 400UL) {
+                return;
+            }
 
-                if (awayElapsedSec >= offDelaySec) {
-                    if (sendCommand(false)) {
-                        _sentPresentState = false;
-                        _awayStartMs = 0;
-                        awayElapsedSec = 0;
-                        isOn = false;
-                        sys_log.log("Lamp Link -> Away timeout OFF", LOG_INFO);
-                    }
-                }
+            userPresent = false;
+
+            if (_awayStartMs == 0) {
+                _awayStartMs = now;
+            }
+
+            // Local countdown progress for smooth UI arc rendering before screen sleeps
+            uint32_t elapsed = (now - _awayStartMs) / 1000UL;
+            awayElapsedSec = (elapsed <= offDelaySec) ? elapsed : offDelaySec;
+
+            // Send immediate POST ?presence=0&delay=<offDelaySec> once when user leaves
+            if (isOn && !_sentAwayCmdForCurrentCycle && _pendingCmd != 0 && (now - _lastCmdAttemptMs > 1500UL)) {
+                _lastCmdAttemptMs = now;
+                _pendingCmd = 0;
             }
         }
     }
 
-    // Periodic background sync (every 3s when Wi-Fi is active)
-    void pollStatus() {
-        if (millis() - _lastPollMs < 3000) return;
-        _lastPollMs = millis();
-
-        if (WiFi.status() != WL_CONNECTED) {
-            online = false;
-            return;
-        }
-        executeHttp("GET", resolveEndpointUrl());
-    }
+    // Kept for compatibility with main.cpp (actual polling runs on Core 0)
+    void pollStatus() {}
 
 private:
     String _baseUrl = DEFAULT_LAMP_URL;
     String _key = DEFAULT_LAMP_KEY;
-    bool _sentPresentState = false;
-    unsigned long _awayStartMs = 0;
-    unsigned long _lastPollMs = 0;
+    String _cachedResolvedBase = "";
+    unsigned long _lastMdnsResolveMs = 0;
 
-    // Resolve .local mDNS hostname to IP if needed and append /api/link
+    bool _sentAwayCmdForCurrentCycle = false;
+    volatile int8_t _pendingCmd = -1; // -1: none, 0: send delayed OFF, 1: send immediate ON
+    unsigned long _lowDebounceStartMs = 0;
+    unsigned long _awayStartMs = 0;
+    unsigned long _lastCmdAttemptMs = 0;
+    unsigned long _lastPollMs = 0;
+    unsigned long _ignorePollUntilMs = 0;
+    TaskHandle_t _taskHandle = nullptr;
+
+    static void taskRunner(void* param) {
+        LampClient* self = static_cast<LampClient*>(param);
+        for (;;) {
+            self->processNetworkLoop();
+            vTaskDelay(pdMS_TO_TICKS(50));
+        }
+    }
+
+    void processNetworkLoop() {
+        if (WiFi.status() != WL_CONNECTED) {
+            online = false;
+            _cachedResolvedBase = "";
+            return;
+        }
+
+        // 1. Handle queued presence command immediately
+        int8_t cmd = _pendingCmd;
+        if (cmd != -1) {
+            _pendingCmd = -1;
+            bool turnOn = (cmd == 1);
+            String cmdUrl = resolveEndpointUrl() + "?presence=" + (turnOn ? "1" : "0");
+            if (!turnOn) {
+                cmdUrl += "&delay=" + String((uint32_t)offDelaySec);
+            }
+
+            if (executeHttp("POST", cmdUrl, true)) {
+                _ignorePollUntilMs = millis() + 1200UL;
+                if (turnOn) {
+                    isOn = true;
+                    _sentAwayCmdForCurrentCycle = false;
+                    sys_log.log("Lamp Link -> Presence ON", LOG_INFO);
+                } else {
+                    _sentAwayCmdForCurrentCycle = true;
+                    sys_log.log("Lamp Link -> Sent OFF in " + String((uint32_t)offDelaySec) + "s", LOG_INFO);
+                }
+            }
+            _lastPollMs = millis();
+            return;
+        }
+
+        // 2. Periodic status poll: 3s when online, 12s backoff when offline
+        if (millis() < _ignorePollUntilMs) return;
+
+        unsigned long interval = online ? 3000UL : 12000UL;
+        if (millis() - _lastPollMs >= interval) {
+            _lastPollMs = millis();
+            executeHttp("GET", resolveEndpointUrl(), false);
+        }
+    }
+
     String resolveEndpointUrl() {
+        if (_cachedResolvedBase.length() > 0 && (online || (millis() - _lastMdnsResolveMs < 30000UL))) {
+            return _cachedResolvedBase + "/api/link";
+        }
+
         String resolvedBase = _baseUrl;
         int protoIdx = resolvedBase.indexOf("://");
         if (protoIdx != -1) {
@@ -116,27 +188,28 @@ private:
             }
 
             if (host.endsWith(".local")) {
+                _lastMdnsResolveMs = millis();
                 String mdnsName = host.substring(0, host.length() - 6);
-                IPAddress ip = MDNS.queryHost(mdnsName.c_str(), 250);
+                IPAddress ip = MDNS.queryHost(mdnsName.c_str(), 150);
                 if (ip != IPAddress(0, 0, 0, 0)) {
                     resolvedBase = "http://" + ip.toString() + portPart;
+                    _cachedResolvedBase = resolvedBase;
+                } else {
+                    _cachedResolvedBase = "";
                 }
+            } else {
+                _cachedResolvedBase = resolvedBase;
             }
         }
         return resolvedBase + "/api/link";
     }
 
-    bool sendCommand(bool turnOn) {
-        if (WiFi.status() != WL_CONNECTED) return false;
-        String cmdUrl = resolveEndpointUrl() + "?presence=" + (turnOn ? "1" : "0");
-        return executeHttp("POST", cmdUrl);
-    }
-
-    bool executeHttp(const char* method, const String& targetUrl) {
+    bool executeHttp(const char* method, const String& targetUrl, bool isCommand) {
         WiFiClient client;
         HTTPClient http;
-        http.setConnectTimeout(300);
-        http.setTimeout(300);
+        http.setConnectTimeout(200);
+        http.setTimeout(250);
+        http.setReuse(false);
 
         if (!http.begin(client, targetUrl)) {
             online = false;
@@ -160,11 +233,23 @@ private:
             int bIdx = payload.indexOf("\"bri\":");
             if (bIdx != -1) brightness = payload.substring(bIdx + 6).toInt();
 
+            // Sync countdown arc with lamp's actual remaining seconds if timer is running
+            int offIdx = payload.indexOf("\"off_in\":");
+            if (offIdx != -1 && !userPresent && isOn) {
+                uint32_t remSec = payload.substring(offIdx + 9).toInt();
+                if (remSec > 0 && offDelaySec >= remSec) {
+                    awayElapsedSec = offDelaySec - remSec;
+                }
+            }
+
             http.end();
             return true;
         }
 
-        online = false;
+        if (!isCommand) {
+            online = false;
+            _cachedResolvedBase = "";
+        }
         http.end();
         return false;
     }

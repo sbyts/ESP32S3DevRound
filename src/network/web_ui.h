@@ -76,6 +76,34 @@ const char WEB_HTML_BODY[] PROGMEM = R"rawliteral(
         <span class="pill-slider"></span>
       </label>
     </div>
+    <div class="group">
+      <label class="field-lbl">Display Sleep Delay after Empty Room (sec)</label>
+      <input type="number" id="cfg_screen_delay" min="5" max="3600" placeholder="15">
+    </div>
+
+    <div class="section-title">Ridy-10-Lite Lamp Link</div>
+    <div class="switch-row">
+      <div>
+        <div class="switch-title">Auto Presence Lamp Control</div>
+        <div class="switch-sub">Turn lamp ON on arrival &amp; delayed OFF when away</div>
+      </div>
+      <label class="pill-switch">
+        <input type="checkbox" id="cfg_lamp_auto">
+        <span class="pill-slider"></span>
+      </label>
+    </div>
+    <div class="group">
+      <label class="field-lbl">Lamp Auto-Off Delay (sec)</label>
+      <input type="number" id="cfg_lamp_delay" min="0" max="3600" placeholder="10">
+    </div>
+    <div class="group">
+      <label class="field-lbl">Lamp URL / IP</label>
+      <input type="text" id="cfg_lamp_url" placeholder="http://192.168.0.13">
+    </div>
+    <div class="group">
+      <label class="field-lbl">Lamp Link API Key</label>
+      <input type="password" id="cfg_lamp_key" placeholder="ridy-desk-2026">
+    </div>
 
     <div class="section-title">Weather & Security</div>
     <div class="group">

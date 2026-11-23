@@ -13,7 +13,7 @@ struct WifiCreds {
 class AppConfig {
 public:
     static const uint8_t MAX_WIFI_NETWORKS = 6;
-
+    uint32_t screenDelaySec = DEFAULT_SCREEN_DELAY;
     // General & security settings
     String city = "Kyiv";
     String adminPass = "admin";
@@ -45,6 +45,7 @@ public:
     void setLampKey(const String& key);
     void setLampDelay(uint32_t delaySec);
     void setLampAuto(bool autoEn);
+    void setScreenDelay(uint32_t delaySec);
 
 private:
     Preferences _prefs;

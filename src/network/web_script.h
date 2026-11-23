@@ -102,6 +102,11 @@ const char WEB_JS[] PROGMEM = R"rawliteral(
           document.getElementById('cfg_city').value = d.city || 'Kyiv';
           document.getElementById('cfg_radar_en').checked = (d.radar_en === true);
           document.getElementById('cfg_eco_wifi').checked = (d.eco_wifi === true);
+          document.getElementById('cfg_screen_delay').value = d.screen_delay;
+          document.getElementById('cfg_lamp_delay').value = d.lamp_delay;
+          document.getElementById('cfg_lamp_auto').checked = (d.lamp_auto === true);
+          document.getElementById('cfg_lamp_url').value = d.lamp_url || '';
+          document.getElementById('cfg_lamp_key').value = d.lamp_key || '';
           savedNetworks = d.networks || [];
           renderWifiList();
         } catch (e) {}
@@ -116,6 +121,11 @@ const char WEB_JS[] PROGMEM = R"rawliteral(
       admin_pass: document.getElementById('cfg_admin_pass').value,
       radar_en: document.getElementById('cfg_radar_en').checked,
       eco_wifi: document.getElementById('cfg_eco_wifi').checked,
+      screen_delay: parseInt(document.getElementById('cfg_screen_delay').value),
+      lamp_delay: parseInt(document.getElementById('cfg_lamp_delay').value),
+      lamp_auto: document.getElementById('cfg_lamp_auto').checked,
+      lamp_url: document.getElementById('cfg_lamp_url').value.trim(),
+      lamp_key: document.getElementById('cfg_lamp_key').value.trim(),
       networks: savedNetworks
     };
     document.getElementById('save_msg').innerText = 'SAVING CONFIGURATION...';

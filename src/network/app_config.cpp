@@ -5,7 +5,7 @@ AppConfig appConfig;
 void AppConfig::load()
 {
     _prefs.begin("climate_cfg", false);
-
+    screenDelaySec = _prefs.getUInt("scr_delay", DEFAULT_SCREEN_DELAY); 
     bootCount = _prefs.getUInt("boots", 0) + 1;
     _prefs.putUInt("boots", bootCount);
 
@@ -115,4 +115,10 @@ void AppConfig::setLampAuto(bool autoEn)
 {
     lampAutoPresence = autoEn;
     _prefs.putBool("lamp_auto", lampAutoPresence);
+}
+
+void AppConfig::setScreenDelay(uint32_t delaySec)
+{
+    screenDelaySec = delaySec;
+    _prefs.putUInt("scr_delay", screenDelaySec);
 }

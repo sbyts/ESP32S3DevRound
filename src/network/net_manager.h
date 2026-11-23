@@ -10,8 +10,10 @@ class NetManager {
 private:
     bool _is_connected = false;
     bool _wifi_suspended = false;
+    bool _ota_initialized = false;
 
     bool connectToBestAvailableWiFi();
+    void setupOTA();
 
 public:
     NetManager() = default;

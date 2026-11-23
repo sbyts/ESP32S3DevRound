@@ -36,5 +36,6 @@
 // Lamp Link defaults (used if not overridden in NVS / Web Admin)
 #define DEFAULT_LAMP_URL      "http://ridy-lamp.local"
 #define DEFAULT_LAMP_KEY      "ridy-desk-2026"
-#define DEFAULT_LAMP_DELAY    60
+#define DEFAULT_LAMP_DELAY    10   // Lamp auto-off delay in seconds
+#define DEFAULT_SCREEN_DELAY  15   // Station display sleep delay in seconds
 #endif // CONFIG_H
